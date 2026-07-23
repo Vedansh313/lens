@@ -1,0 +1,21 @@
+{
+  "baseline": {
+    "P@5": 0.775,
+    "P@10": 0.837,
+    "NDCG@5": 0.943,
+    "NDCG@10": 0.925
+  },
+  "finetuned": {
+    "P@5": 0.85,
+    "P@10": 0.838,
+    "NDCG@5": 0.96,
+    "NDCG@10": 0.948
+  },
+  "improvement": {
+    "P@5": "+0.075",
+    "P@10": "+0.001",
+    "NDCG@5": "+0.017",
+    "NDCG@10": "+0.023"
+  },
+  "method": "Triplet margin loss fine-tuning on 3000 metadata-mined triplets, fp32, lr=1e-6, 2 epochs"
+}

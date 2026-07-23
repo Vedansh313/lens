@@ -1,0 +1,30 @@
+[
+  {
+    "timestamp": "2026-06-12T09:51:16.703301",
+    "query": "blue running shoes",
+    "product_id": 36419,
+    "product_name": "Spinn Women Alliance Blue Sports Shoes",
+    "feedback": "positive"
+  },
+  {
+    "timestamp": "2026-06-12T09:51:16.703455",
+    "query": "blue running shoes",
+    "product_id": 9401,
+    "product_name": "Nike Men Lunarswi + 2 Blue Sports Shoes",
+    "feedback": "positive"
+  },
+  {
+    "timestamp": "2026-06-12T09:51:16.703510",
+    "query": "blue running shoes",
+    "product_id": 5476,
+    "product_name": "Nike Women's Air Max Moto White Shoe",
+    "feedback": "negative"
+  },
+  {
+    "timestamp": "2026-06-12T09:51:16.703558",
+    "query": "blue running shoes",
+    "product_id": 31948,
+    "product_name": "Nike Men Air Pegasus Blue Sports Shoes",
+    "feedback": "negative"
+  }
+]

@@ -1,0 +1,20 @@
+# Lens local search API — Python dependencies
+fastapi
+uvicorn[standard]
+python-multipart
+
+# ML / search stack
+torch
+torchvision
+faiss-cpu
+numpy
+pandas
+pillow
+
+# OpenAI CLIP, repackaged for pip (no git needed).
+# Exposes the same `import clip` / clip.load / clip.tokenize API, so no code
+# changes are required and the fine-tuned clip_finetuned.pt weights still load.
+clip-anytorch
+ftfy
+regex
+tqdm

@@ -1,0 +1,18 @@
+{
+  "model": "CLIP ViT-B/32",
+  "dataset": "Fashion Product Images Small",
+  "total_products": 44419,
+  "test_queries": 8,
+  "results": {
+    "@5": {
+      "precision": 0.775,
+      "recall": 0.039,
+      "ndcg": 0.943
+    },
+    "@10": {
+      "precision": 0.837,
+      "recall": 0.084,
+      "ndcg": 0.925
+    }
+  }
+}
