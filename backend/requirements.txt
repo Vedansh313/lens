@@ -11,6 +11,14 @@ numpy
 pandas
 pillow
 
+# Database (PostgreSQL): ORM, migrations, driver.
+# psycopg[binary] is psycopg 3 with prebuilt wheels — no local libpq/compiler
+# needed on Windows. SQLAlchemy reaches it via the postgresql+psycopg:// URL.
+sqlalchemy
+alembic
+psycopg[binary]
+python-dotenv
+
 # OpenAI CLIP, repackaged for pip (no git needed).
 # Exposes the same `import clip` / clip.load / clip.tokenize API, so no code
 # changes are required and the fine-tuned clip_finetuned.pt weights still load.
