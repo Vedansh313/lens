@@ -1,0 +1,91 @@
+"""SQLAlchemy models for the Lens product catalogue.
+
+=============================================================================
+CRITICAL — faiss_index and id are NOT interchangeable.
+=============================================================================
+The search pipeline (ai/search_system.py:86) resolves FAISS hits positionally:
+
+    distances, indices = index.search(q_emb, retrieve_n)
+    row = df.iloc[idx]          # idx is a ROW POSITION, not a product id
+
+FAISS knows nothing about product ids — it returns the ordinal position of a
+vector inside product_index.faiss. That position only means something because
+the metadata was built in the same order as the vectors (both 44419 long).
+
+`faiss_index` preserves that ordering in the database: faiss_index == the row's
+position in ai/models/product_metadata.json, 0..44418. `id` is the dataset's
+own product id (1163..60000, sparse and unordered) used for the API response
+and image URLs.
+
+Product 0 has id=15970. Confusing the two returns plausible-looking but wrong
+products for every query, with the AI pipeline completely untouched — which is
+why faiss_index is NOT NULL + UNIQUE + indexed, and why the seed script asserts
+the ordering rather than trusting it.
+=============================================================================
+
+Column nullability below was derived by profiling the 44419 rows of
+product_metadata.json, not assumed. Null counts at seed time:
+    productDisplayName 7 | baseColour 15 | season 21 | year 1 | usage 317
+    id, masterCategory, subCategory, articleType, gender: no nulls
+"""
+from __future__ import annotations
+
+from sqlalchemy import Index, Integer, SmallInteger, String
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Product(Base):
+    """One row of the fashion product catalogue.
+
+    Attribute names are snake_case; the search code consumes the original
+    camelCase dataset names, so server.py maps between them when it builds the
+    DataFrame it hands to ai.search_system.build_search.
+    """
+
+    __tablename__ = "products"
+
+    # Dataset product id. Real, sparse ids from the source data — never
+    # generated, so no autoincrement. Used for /images/{id}.jpg.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+
+    # Row position in product_index.faiss / product_metadata.json (0..44418).
+    # The alignment guarantee the entire search depends on. See module docstring.
+    faiss_index: Mapped[int] = mapped_column(
+        Integer, nullable=False, unique=True, index=True
+    )
+
+    # --- Fields returned by the search API ---------------------------------
+    # 7 nulls in the source data.
+    product_display_name: Mapped[str | None] = mapped_column(String(255))
+    # API "category". No nulls.
+    master_category: Mapped[str] = mapped_column(String(64), nullable=False)
+    # NOTE: the API's "subCategory" field is fed from article_type, not this
+    # column — see server.py. Stored for completeness/filtering. No nulls.
+    sub_category: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Re-ranker category boost + query-parser vocabulary. No nulls.
+    article_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Re-ranker colour boost + vocabulary. 15 nulls.
+    base_colour: Mapped[str | None] = mapped_column(String(64))
+    # Re-ranker gender boost. No nulls.
+    gender: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    # --- Catalogue fields, not currently returned by search ----------------
+    season: Mapped[str | None] = mapped_column(String(32))  # 21 nulls
+    year: Mapped[int | None] = mapped_column(SmallInteger)  # 1 null; 2007-2019
+    usage: Mapped[str | None] = mapped_column(String(32))  # 317 nulls
+
+    # Composite index supporting the faceted filtering the storefront will do
+    # (category + colour + gender are exactly the re-ranker's boost fields).
+    __table_args__ = (
+        Index("ix_products_facets", "article_type", "base_colour", "gender"),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return (
+            f"<Product id={self.id} faiss_index={self.faiss_index} "
+            f"name={self.product_display_name!r}>"
+        )
