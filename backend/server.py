@@ -52,6 +52,7 @@ from catalog import router as catalog_router
 from cart import router as cart_router
 from checkout import router as checkout_router
 from engagement import router as engagement_router
+from orders import router as orders_router
 from payments import router as payments_router
 from hybrid import build_hybrid_router
 
@@ -189,6 +190,8 @@ app.include_router(engagement_router)
 app.include_router(checkout_router)
 # Simulated payment gateway (/orders/{id}/pay). Auth-protected.
 app.include_router(payments_router)
+# Order retrieval + invoice (/orders, /orders/{id}, /orders/{id}/invoice).
+app.include_router(orders_router)
 # Hybrid search (/api/v1/hybrid-search): reuses the re-ranker + embed helpers
 # above (injected, not re-imported) and fuses in catalog filters + real pricing.
 app.include_router(
