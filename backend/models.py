@@ -48,8 +48,8 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -133,6 +133,10 @@ class Product(Base):
     in_stock: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
+    # Units on hand (Phase 3). Backfilled deterministically from id, consistent
+    # with in_stock (0 when out of stock). Checkout decrements it and keeps
+    # in_stock = (stock_quantity > 0) in sync.
+    stock_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # --- Full-text search (Phase 2 step 3) ---------------------------------
     # STORED generated column over name + article type + colour, kept in sync
@@ -261,3 +265,112 @@ class RecentlyViewed(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"<RecentlyViewed user={self.user_id} product={self.product_id}>"
+
+
+class Address(Base):
+    """A saved shipping address (Phase 3). Orders snapshot the address at
+    checkout, so editing/deleting one later never mutates a placed order."""
+
+    __tablename__ = "addresses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    line1: Mapped[str] = mapped_column(String(255), nullable=False)
+    line2: Mapped[str | None] = mapped_column(String(255))
+    city: Mapped[str] = mapped_column(String(128), nullable=False)
+    state: Mapped[str] = mapped_column(String(128), nullable=False)
+    postal_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    country: Mapped[str] = mapped_column(String(64), nullable=False, server_default=text("'US'"))
+    is_default: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class Order(Base):
+    """An order created from a user's cart at checkout (Phase 3).
+
+    The shipping address is stored as a JSONB snapshot and each line's price is
+    snapshotted in order_items, so a placed order is immutable regardless of
+    later product/address/price changes. status: pending -> paid.
+    """
+
+    __tablename__ = "orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Human-facing reference (e.g. LENS-XXXXXXXXXX); not the sequential id.
+    order_number: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'pending'"))
+    shipping_address: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+    # Money breakdown; total = subtotal - discount + tax + shipping.
+    subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    discount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, server_default=text("0"))
+    tax: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    shipping: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    coupon_code: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    items: Mapped[list["OrderItem"]] = relationship(
+        back_populates="order", cascade="all, delete-orphan", order_by="OrderItem.id"
+    )
+    payments: Mapped[list["Payment"]] = relationship(
+        back_populates="order", cascade="all, delete-orphan", order_by="Payment.id"
+    )
+
+
+class OrderItem(Base):
+    """One line of an order. product_name/unit_price are snapshots taken at
+    checkout so the line is stable even if the product later changes or is
+    removed (product_id goes NULL on delete)."""
+
+    __tablename__ = "order_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id", ondelete="SET NULL")
+    )
+    product_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+
+    order: Mapped["Order"] = relationship(back_populates="items")
+
+
+class Payment(Base):
+    """A simulated payment attempt against an order (Phase 3). No real funds
+    move and no full card number is ever stored — `detail` holds only masked
+    data (e.g. card last-4 or UPI handle)."""
+
+    __tablename__ = "payments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    method: Mapped[str] = mapped_column(String(16), nullable=False)  # upi | card | wallet
+    status: Mapped[str] = mapped_column(String(16), nullable=False)  # success | failed
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    transaction_ref: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    detail: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    order: Mapped["Order"] = relationship(back_populates="payments")
