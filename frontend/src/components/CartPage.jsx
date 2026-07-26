@@ -2,7 +2,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { SITE_NAME } from "@/config/site";
 import { mapProduct } from "@/data/api";
 
-export default function CartPage({ cart, onSetQuantity, onRemove, onClear, onBack, theme, onToggleTheme }) {
+export default function CartPage({ cart, onSetQuantity, onRemove, onClear, onBack, onCheckout, theme, onToggleTheme }) {
   const items = (cart.items || []).map(mapProduct);
 
   return (
@@ -91,8 +91,8 @@ export default function CartPage({ cart, onSetQuantity, onRemove, onClear, onBac
                 <span>Total</span>
                 <span>${cart.total}</span>
               </div>
-              <button type="button" className="login-submit" disabled title="Checkout arrives in a later phase">
-                Checkout (coming soon)
+              <button type="button" className="login-submit" onClick={onCheckout}>
+                Checkout
               </button>
             </aside>
           </div>

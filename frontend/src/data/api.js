@@ -52,7 +52,18 @@ async function sendJSON(method, path, body) {
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}`);
+  if (!res.ok) {
+    // Surface the server's message (e.g. "Payment was declined", coupon/stock
+    // errors) so callers can show it, not a bare status code.
+    let detail;
+    try {
+      const parsed = await res.json();
+      if (typeof parsed.detail === "string") detail = parsed.detail;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(detail || `${method} ${path} -> ${res.status}`);
+  }
   return res.json();
 }
 
@@ -156,4 +167,24 @@ export function getRecentlyViewed(limit = 12) {
 }
 export function recordView(productId) {
   return sendJSON("POST", "/recently-viewed", { product_id: productId });
+}
+
+// ---- Checkout / orders / payments (auth) ----------------------------------
+export function getAddresses() {
+  return getJSON("/addresses");
+}
+export function createAddress(address) {
+  return sendJSON("POST", "/addresses", address);
+}
+export function getQuote(couponCode) {
+  return getJSON("/checkout/quote", couponCode ? { coupon_code: couponCode } : undefined);
+}
+export function createOrder(payload) {
+  return sendJSON("POST", "/checkout", payload);
+}
+export function payOrder(orderId, payload) {
+  return sendJSON("POST", `/orders/${orderId}/pay`, payload);
+}
+export function getInvoice(orderId) {
+  return getJSON(`/orders/${orderId}/invoice`);
 }

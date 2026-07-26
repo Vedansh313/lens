@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import CartPage from "@/components/CartPage";
+import CheckoutPage from "@/components/CheckoutPage";
+import ConfirmationPage from "@/components/ConfirmationPage";
 import Dashboard from "@/components/Dashboard";
 import LoginPage from "@/components/LoginPage";
 import { SITE_NAME, SITE_TAGLINE } from "@/config/site";
@@ -11,6 +13,7 @@ export default function App() {
   const [session, setSession] = useLocalStorage("lens-session", null);
   const [theme, setTheme] = useLocalStorage("lens-theme", "light");
   const [view, setView] = useState("catalog");
+  const [confirmedOrder, setConfirmedOrder] = useState(null);
   const cart = useCart();
 
   useEffect(() => {
@@ -64,6 +67,36 @@ export default function App() {
         onRemove={cart.remove}
         onClear={cart.clear}
         onBack={() => setView("catalog")}
+        onCheckout={() => setView("checkout")}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+    );
+  }
+
+  if (view === "checkout") {
+    return (
+      <CheckoutPage
+        onBack={() => setView("cart")}
+        onPlaced={(order) => {
+          setConfirmedOrder(order);
+          cart.refresh();
+          setView("confirmation");
+        }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+    );
+  }
+
+  if (view === "confirmation") {
+    return (
+      <ConfirmationPage
+        order={confirmedOrder}
+        onDone={() => {
+          setConfirmedOrder(null);
+          setView("catalog");
+        }}
         theme={theme}
         onToggleTheme={toggleTheme}
       />

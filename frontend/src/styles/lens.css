@@ -249,6 +249,67 @@ nav a:hover { color: var(--text); }
 .cart-summary-row.total { color: var(--text); font-weight: 700; font-size: 1.1rem; border-top: 1px solid var(--border); margin-top: 8px; padding-top: 12px; }
 .cart-summary .login-submit { margin-top: 16px; width: 100%; }
 
+/* --- Checkout + confirmation (step 5) ----------------------------------- */
+.checkout-page, .confirmation-page { max-width: 1000px; margin: 0 auto; padding: 32px 24px 64px; }
+.checkout-layout { display: grid; grid-template-columns: 1fr 320px; gap: 32px; align-items: start; }
+@media (max-width: 860px) { .checkout-layout { grid-template-columns: 1fr; } }
+
+.checkout-block { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+.checkout-block h3 { margin: 0 0 14px; }
+
+.radio-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 0.9rem; }
+.address-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.checkout-field { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+.checkout-field input, .checkout-field select {
+  padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-2); color: var(--text); font-size: 0.9rem;
+}
+
+.method-tabs { display: flex; gap: 8px; margin-bottom: 4px; }
+.method-tab {
+  flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-2); color: var(--text); cursor: pointer; font-size: 0.9rem;
+}
+.method-tab.active { background: var(--primary); color: var(--surface); border-color: var(--primary); }
+.test-hint { grid-column: 1 / -1; color: var(--muted); font-size: 0.78rem; margin: 4px 0 0; }
+
+.checkout-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.checkout-summary h3 { margin: 0 0 14px; }
+.coupon-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.coupon-row input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); }
+.coupon-row button { padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); cursor: pointer; }
+.coupon-ok { color: #2e7d32; font-size: 0.82rem; margin: 0 0 8px; }
+
+/* Confirmation */
+.confirmation-hero { text-align: center; padding: 24px 0 8px; }
+.confirm-check {
+  width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 50%;
+  background: #2e7d32; color: #fff; font-size: 1.8rem; line-height: 56px;
+}
+.confirm-actions { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
+.confirm-actions .login-submit { width: auto; padding: 10px 22px; }
+
+.invoice { margin-top: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; }
+.invoice-head { display: flex; justify-content: space-between; gap: 16px; }
+.invoice-head h2 { margin: 0; }
+.invoice-seller { text-align: right; }
+.invoice-status { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; text-transform: uppercase; background: var(--surface-2); }
+.invoice-status.paid { background: #2e7d32; color: #fff; }
+.invoice-billto { margin: 20px 0; }
+.invoice-billto h4 { margin: 0 0 6px; }
+.invoice-billto p { margin: 2px 0; }
+.invoice-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+.invoice-table th, .invoice-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+.invoice-table th:not(:first-child), .invoice-table td:not(:first-child) { text-align: right; }
+.invoice-totals { max-width: 300px; margin-left: auto; }
+.invoice-payment { margin-top: 16px; text-align: right; }
+
+@media print {
+  .no-print { display: none !important; }
+  .lens-app { background: #fff; }
+  .invoice { border: none; padding: 0; }
+}
+
 .catalog-layout { display: grid; grid-template-columns: 290px 1fr; gap: 1.2rem; align-items: start; }
 .filters {
   position: sticky; top: 4.6rem;
