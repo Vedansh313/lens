@@ -10,7 +10,7 @@ import os
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import asc, desc, func, select
+from sqlalchemy import asc, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from auth import get_db  # reuse the request-scoped session dependency
@@ -82,8 +82,10 @@ def list_products(
 ) -> dict:
     """Filtered, sorted, paginated product list.
 
-    `q` here is a plain case-insensitive substring match on the product name;
-    real full-text + fuzzy search replaces it in step 3.
+    When `q` is given it uses Postgres full-text search (websearch_to_tsquery
+    over search_vector) OR trigram fuzzy matching on the name, so typos still
+    match. With no explicit sort, results come back by relevance; an explicit
+    price/name sort still wins.
     """
     filters = []
     if category:
@@ -100,19 +102,31 @@ def list_products(
         filters.append(Product.price <= max_price)
     if in_stock is not None:
         filters.append(Product.in_stock == in_stock)
+
+    tsquery = None
     if q:
-        filters.append(Product.product_display_name.ilike(f"%{q}%"))
+        tsquery = func.websearch_to_tsquery("english", q)
+        filters.append(
+            or_(
+                Product.search_vector.op("@@")(tsquery),        # full-text
+                Product.product_display_name.op("%")(q),         # trigram fuzzy
+            )
+        )
 
     total = db.scalar(select(func.count(Product.id)).where(*filters))
-    # id is always the final tiebreaker so pagination is deterministic even when
-    # the primary sort key (e.g. price) has ties.
-    stmt = (
-        select(Product)
-        .where(*filters)
-        .order_by(_SORTS[sort], asc(Product.id))
-        .limit(limit)
-        .offset(offset)
-    )
+
+    # With a query and no explicit sort, order by relevance (full-text rank +
+    # trigram similarity). id is always the final tiebreaker so pagination stays
+    # deterministic even when the primary key has ties.
+    if q and sort == "id":
+        relevance = func.ts_rank(Product.search_vector, tsquery) + func.similarity(
+            Product.product_display_name, q
+        )
+        order_by = [desc(relevance), asc(Product.id)]
+    else:
+        order_by = [_SORTS[sort], asc(Product.id)]
+
+    stmt = select(Product).where(*filters).order_by(*order_by).limit(limit).offset(offset)
     items = db.scalars(stmt).all()
     return {
         "items": [serialize_product(p) for p in items],
@@ -149,3 +163,28 @@ def categories(db: Session = Depends(get_db)) -> dict:
         "genders": distinct(Product.gender),
         "priceRange": {"min": float(lo), "max": float(hi)},
     }
+
+
+@router.get("/autocomplete")
+def autocomplete(
+    q: str = Query(..., min_length=2),
+    limit: int = Query(8, ge=1, le=20),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Type-ahead product-name suggestions: prefix matches + trigram fuzzy,
+    ranked by similarity. Names are de-duplicated via GROUP BY."""
+    similarity = func.max(func.similarity(Product.product_display_name, q)).label("sim")
+    stmt = (
+        select(Product.product_display_name, similarity)
+        .where(
+            or_(
+                Product.product_display_name.op("%")(q),         # fuzzy
+                Product.product_display_name.ilike(f"{q}%"),     # prefix
+            )
+        )
+        .group_by(Product.product_display_name)
+        .order_by(similarity.desc())
+        .limit(limit)
+    )
+    rows = db.execute(stmt).all()
+    return {"suggestions": [name for name, _ in rows]}

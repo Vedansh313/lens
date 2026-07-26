@@ -35,6 +35,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    Computed,
     DateTime,
     Index,
     Integer,
@@ -44,6 +45,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -129,12 +131,37 @@ class Product(Base):
         Boolean, nullable=False, default=True, server_default=text("true")
     )
 
+    # --- Full-text search (Phase 2 step 3) ---------------------------------
+    # STORED generated column over name + article type + colour, kept in sync
+    # automatically. Must use the immutable 'english'::regconfig form (a plain
+    # 'english' text arg is only STABLE and a generated column rejects it).
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('english'::regconfig, "
+            "coalesce(product_display_name, '') || ' ' || "
+            "coalesce(article_type, '') || ' ' || "
+            "coalesce(base_colour, ''))",
+            persisted=True,
+        ),
+        nullable=True,
+    )
+
     # Composite index supporting the faceted filtering the storefront will do
     # (category + colour + gender are exactly the re-ranker's boost fields).
     __table_args__ = (
         Index("ix_products_facets", "article_type", "base_colour", "gender"),
         # Price is a primary sort/filter axis on the catalog page.
         Index("ix_products_price", "price"),
+        # GIN over the tsvector for full-text (@@) queries.
+        Index("ix_products_search_vector", "search_vector", postgresql_using="gin"),
+        # Trigram GIN on the name for fuzzy/typo (% operator) matching.
+        Index(
+            "ix_products_name_trgm",
+            "product_display_name",
+            postgresql_using="gin",
+            postgresql_ops={"product_display_name": "gin_trgm_ops"},
+        ),
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
