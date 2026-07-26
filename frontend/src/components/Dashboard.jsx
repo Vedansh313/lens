@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ComparisonTray from "@/components/ComparisonTray";
 import ControlsBar from "@/components/ControlsBar";
 import FilterSidebar from "@/components/FilterSidebar";
@@ -11,132 +11,222 @@ import ProductModal from "@/components/ProductModal";
 import RecommendationCarousel from "@/components/RecommendationCarousel";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SITE_NAME } from "@/config/site";
-import { products, trendingSearches } from "@/data/mockData";
+import {
+  fetchAutocomplete,
+  fetchCategories,
+  fetchProducts,
+  hybridSearch,
+  mapProduct,
+} from "@/data/api";
+import { trendingSearches } from "@/data/mockData";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
-// Set VITE_API_URL in .env (or .env.local) to flip between local and ngrok.
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+const LIMIT = 24;
+// UI sort key -> catalog API sort key (browse mode). Search mode sorts client-
+// side because the hybrid endpoint returns a relevance-ranked top-K.
+const API_SORT = {
+  relevance: "id",
+  priceLow: "price_asc",
+  priceHigh: "price_desc",
+  name: "name",
+};
 
 export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
-  const maxPrice = Math.max(...products.map((item) => item.price));
   const [query, setQuery] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
-  const [selectedImageFile, setSelectedImageFile] = useState(null); // actual File object for API
+  const [selectedImageFile, setSelectedImageFile] = useState(null);
+
+  // "Committed" search inputs — distinct from the live text box so typing does
+  // not refetch until the user actually searches.
+  const [activeQuery, setActiveQuery] = useState("");
+  const [activeImageFile, setActiveImageFile] = useState(null);
+  const isSearch = Boolean(activeQuery || activeImageFile);
+
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [offset, setOffset] = useState(0);
+
+  const [facets, setFacets] = useState({
+    categories: [],
+    articleTypes: [],
+    colours: [],
+    genders: [],
+    priceRange: { min: 0, max: 500 },
+  });
+  const [filters, setFilters] = useState({
+    category: null,
+    articleType: null,
+    colour: null,
+    gender: null,
+    inStock: false,
+    maxPrice: null,
+  });
+  const [sortBy, setSortBy] = useState("relevance");
+
+  const [suggestions, setSuggestions] = useState([]);
+  const acTimer = useRef(null);
+
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [sortBy, setSortBy] = useState("similarity");
   const [viewMode, setViewMode] = useState("grid");
-  const [searchResults, setSearchResults] = useState([]); // real API results
   const [searchHistory, setSearchHistory] = useLocalStorage("lens-search-history", []);
-  const [savedSearches, setSavedSearches] = useLocalStorage("lens-saved-searches", [
-    "minimal watches",
-    "olive chinos",
-  ]);
+  const [savedSearches] = useLocalStorage("lens-saved-searches", ["minimal watches", "olive chinos"]);
   const [wishlist, setWishlist] = useLocalStorage("lens-wishlist", []);
   const [recentlyViewed, setRecentlyViewed] = useLocalStorage("lens-recently-viewed", []);
   const [compareList, setCompareList] = useState([]);
-  const [filters, setFilters] = useState({
-    categories: [],
-    brands: [],
-    colors: [],
-    inStockOnly: false,
-    maxPrice,
-  });
 
-  const handleRunSearch = async (newQuery) => {
-    const finalQuery = (newQuery ?? query).trim();
-    if (newQuery) setQuery(newQuery);
-    if (!finalQuery && !selectedImageFile) return;
+  const maxPrice = facets.priceRange?.max ?? 500;
 
-    setLoading(true);
-    try {
-      const formData = new FormData();
-      if (selectedImageFile) formData.append("image", selectedImageFile);
-      if (finalQuery) formData.append("query", finalQuery);
-      formData.append("alpha", "0.7");
-      formData.append("top_k", "10");
+  // ---- Facets (once) -----------------------------------------------------
+  useEffect(() => {
+    fetchCategories()
+      .then((f) => {
+        setFacets(f);
+        setFilters((prev) => ({ ...prev, maxPrice: prev.maxPrice ?? f.priceRange.max }));
+      })
+      .catch((err) => console.error("categories:", err));
+  }, []);
 
-      const res = await fetch(`${API_URL}/api/v1/search`, {
-        method: "POST",
-        body: formData,
-        headers: {
-          "ngrok-skip-browser-warning": "true",
-        },
-      });
+  // ---- Reset to first page whenever the result set changes ---------------
+  useEffect(() => {
+    setOffset((prev) => (prev === 0 ? prev : 0));
+  }, [filters, sortBy, activeQuery, activeImageFile]);
 
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
+  // ---- Main loader: catalog browse OR hybrid search ----------------------
+  useEffect(() => {
+    let cancelled = false;
+    const apiFilters = {
+      category: filters.category || undefined,
+      article_type: filters.articleType || undefined,
+      colour: filters.colour || undefined,
+      gender: filters.gender || undefined,
+      in_stock: filters.inStock ? true : undefined,
+      max_price: filters.maxPrice ?? undefined,
+    };
 
-      const data = await res.json();
-
-      // Map API results to the shape ProductCard expects
-      const mapped = data.products.map((p) => ({
-        id: p.id,
-        name: p.name,
-        brand: p.name.split(" ")[0], // extract brand from name
-        category: p.category,
-        color: p.colour,
-        price: Math.floor(Math.random() * 5000) + 500, // placeholder until pricing data is added
-        rating: parseFloat((3.5 + Math.random() * 1.5).toFixed(1)),
-        match: Math.round(p.score * 100),
-        available: true,
-        image: p.image_url,
-        style: p.subCategory,
-        texture: "",
-      }));
-
-      setSearchResults(mapped);
-      setSearchHistory((prev) =>
-        [finalQuery, ...prev.filter((item) => item !== finalQuery)].slice(0, 8)
-      );
-      if (Math.random() > 0.5) {
-        setSavedSearches((prev) =>
-          [finalQuery, ...prev.filter((item) => item !== finalQuery)].slice(0, 6)
-        );
+    async function load() {
+      setLoading(true);
+      try {
+        if (isSearch) {
+          const data = await hybridSearch({
+            query: activeQuery,
+            imageFile: activeImageFile,
+            filters: {
+              category: filters.category,
+              colour: filters.colour,
+              gender: filters.gender,
+              inStock: filters.inStock ? true : undefined,
+              maxPrice: filters.maxPrice,
+            },
+            topK: 48,
+          });
+          if (!cancelled) {
+            setItems((data.products || []).map(mapProduct));
+            setTotal(data.total || 0);
+          }
+        } else {
+          const data = await fetchProducts({
+            ...apiFilters,
+            sort: API_SORT[sortBy],
+            limit: LIMIT,
+            offset,
+          });
+          if (!cancelled) {
+            setItems((data.items || []).map(mapProduct));
+            setTotal(data.total || 0);
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("load results:", err);
+          setItems([]);
+          setTotal(0);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (err) {
-      console.error("Search failed:", err);
-      // Fall back to mock data on error so UI doesn't break
-      setSearchResults([]);
-    } finally {
-      setLoading(false);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [filters, sortBy, offset, activeQuery, activeImageFile, isSearch]);
+
+  // Search results come back relevance-ranked; sort them client-side and apply
+  // the one filter the hybrid endpoint doesn't take (article type).
+  const displayItems = useMemo(() => {
+    if (!isSearch) return items;
+    let list = items;
+    if (filters.articleType) list = list.filter((p) => p.subCategory === filters.articleType);
+    const copy = [...list];
+    if (sortBy === "priceLow") copy.sort((a, b) => a.price - b.price);
+    else if (sortBy === "priceHigh") copy.sort((a, b) => b.price - a.price);
+    else if (sortBy === "name") copy.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    return copy;
+  }, [items, sortBy, isSearch, filters.articleType]);
+
+  const resultCount = isSearch ? displayItems.length : total;
+  const pageCount = Math.ceil(total / LIMIT) || 1;
+  const page = Math.floor(offset / LIMIT) + 1;
+  const completeTheLook = displayItems.slice(3, 9);
+
+  // ---- Search + autocomplete --------------------------------------------
+  const handleRunSearch = (newQuery) => {
+    const finalQuery = (newQuery ?? query).trim();
+    if (newQuery !== undefined) setQuery(newQuery);
+    setSuggestions([]);
+    if (!finalQuery && !selectedImageFile) {
+      setActiveQuery("");
+      setActiveImageFile(null);
+      return;
+    }
+    setActiveQuery(finalQuery);
+    setActiveImageFile(selectedImageFile);
+    if (finalQuery) {
+      setSearchHistory((prev) => [finalQuery, ...prev.filter((i) => i !== finalQuery)].slice(0, 8));
     }
   };
 
-  const filteredProducts = useMemo(() => {
-    // Use real API results if available, otherwise fall back to mock data
-    let results =
-      searchResults.length > 0
-        ? searchResults
-        : products.filter((item) => {
-            const q = query.toLowerCase();
-            const queryMatch =
-              !q ||
-              [item.name, item.category, item.brand, item.color, item.style, item.texture]
-                .join(" ")
-                .toLowerCase()
-                .includes(q);
-            const categoryMatch =
-              !filters.categories.length || filters.categories.includes(item.category);
-            const brandMatch =
-              !filters.brands.length || filters.brands.includes(item.brand);
-            const colorMatch =
-              !filters.colors.length || filters.colors.includes(item.color);
-            const stockMatch = !filters.inStockOnly || item.available;
-            const priceMatch = item.price <= filters.maxPrice;
+  const handleClearSearch = () => {
+    setActiveQuery("");
+    setActiveImageFile(null);
+    setQuery("");
+    setSelectedImage(null);
+    setSelectedImageFile(null);
+    setSuggestions([]);
+  };
 
-            return queryMatch && categoryMatch && brandMatch && colorMatch && stockMatch && priceMatch;
-          });
+  const handleQueryChange = (value) => {
+    setQuery(value);
+    if (acTimer.current) clearTimeout(acTimer.current);
+    if (!value || value.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    acTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetchAutocomplete(value);
+        setSuggestions(res.suggestions || []);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 180);
+  };
 
-    if (sortBy === "similarity") results = results.sort((a, b) => b.match - a.match);
-    if (sortBy === "rating") results = results.sort((a, b) => b.rating - a.rating);
-    if (sortBy === "priceLow") results = results.sort((a, b) => a.price - b.price);
-    if (sortBy === "priceHigh") results = results.sort((a, b) => b.price - a.price);
+  const handlePickSuggestion = (suggestion) => {
+    setSuggestions([]);
+    handleRunSearch(suggestion);
+  };
 
-    return results;
-  }, [query, filters, sortBy, searchResults]);
+  const handleImageUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedImage(file.name);
+      setSelectedImageFile(file);
+    }
+  };
 
-  const completeTheLook = filteredProducts.slice(3, 9);
-
+  // ---- Product interactions (wishlist/recent stay local until step 7c) ---
   const handleOpenProduct = (product) => {
     setSelectedProduct(product);
     setRecentlyViewed((prev) =>
@@ -157,14 +247,6 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
       }
       return [...prev, product].slice(0, 4);
     });
-  };
-
-  const handleImageUpload = (event) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedImage(file.name);
-      setSelectedImageFile(file); // store actual File for FormData
-    }
   };
 
   return (
@@ -190,7 +272,9 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
 
       <HeroSection
         query={query}
-        setQuery={setQuery}
+        onQueryChange={handleQueryChange}
+        suggestions={suggestions}
+        onPickSuggestion={handlePickSuggestion}
         onImageUpload={handleImageUpload}
         onCameraUpload={() => setSelectedImage("camera-capture.jpg")}
         onRunSearch={() => handleRunSearch()}
@@ -204,19 +288,32 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
       />
 
       <section className="catalog-layout" id="catalog">
-        <FilterSidebar filters={filters} setFilters={setFilters} maxPrice={maxPrice} />
+        <FilterSidebar facets={facets} filters={filters} setFilters={setFilters} maxPrice={maxPrice} />
 
         <main className="catalog-content">
+          {isSearch && (
+            <div className="search-banner">
+              <span>
+                Showing results for{" "}
+                <strong>{activeQuery || "your image"}</strong>
+                {activeImageFile && activeQuery ? " + image" : ""}
+              </span>
+              <button type="button" className="chip" onClick={handleClearSearch}>
+                Clear search
+              </button>
+            </div>
+          )}
+
           <ControlsBar
             sortBy={sortBy}
             setSortBy={setSortBy}
             viewMode={viewMode}
             setViewMode={setViewMode}
-            count={filteredProducts.length}
+            count={resultCount}
           />
-          <InsightsPanel query={query} selectedImage={selectedImage} />
+          <InsightsPanel query={activeQuery} selectedImage={selectedImage} />
           <ProductGrid
-            items={filteredProducts}
+            items={displayItems}
             viewMode={viewMode}
             onOpen={handleOpenProduct}
             loading={loading}
@@ -225,6 +322,28 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
             compareList={compareList}
             onCompareToggle={toggleCompare}
           />
+
+          {!isSearch && total > LIMIT && (
+            <div className="pager">
+              <button
+                type="button"
+                disabled={offset === 0}
+                onClick={() => setOffset((o) => Math.max(0, o - LIMIT))}
+              >
+                Previous
+              </button>
+              <span>
+                Page {page} of {pageCount}
+              </span>
+              <button
+                type="button"
+                disabled={offset + LIMIT >= total}
+                onClick={() => setOffset((o) => o + LIMIT)}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </main>
       </section>
 

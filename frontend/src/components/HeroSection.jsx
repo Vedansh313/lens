@@ -1,8 +1,10 @@
-﻿import { trendingSearches } from "@/data/mockData";
+import { trendingSearches } from "@/data/mockData";
 
 export default function HeroSection({
   query,
-  setQuery,
+  onQueryChange,
+  suggestions = [],
+  onPickSuggestion,
   onImageUpload,
   onCameraUpload,
   onRunSearch,
@@ -45,12 +47,26 @@ export default function HeroSection({
               onRunSearch();
             }}
           >
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="e.g. ribbed knit, warm tone"
-              aria-label="AI search prompt"
-            />
+            <div className="search-input-wrap">
+              <input
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder="e.g. blue running shoes for men"
+                aria-label="AI search prompt"
+                autoComplete="off"
+              />
+              {suggestions.length > 0 && (
+                <ul className="autocomplete">
+                  {suggestions.map((suggestion) => (
+                    <li key={suggestion}>
+                      <button type="button" onClick={() => onPickSuggestion(suggestion)}>
+                        {suggestion}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <button type="submit">Search</button>
           </form>
 
@@ -71,4 +87,3 @@ export default function HeroSection({
     </section>
   );
 }
-

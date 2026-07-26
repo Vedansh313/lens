@@ -1,14 +1,38 @@
-﻿import { brands, categories, colors } from "@/data/mockData";
+// Real catalog facets from GET /categories. Single-select per facet (matches
+// the catalog API, which takes one value per dimension). Brand was intentionally
+// dropped — the dataset has no brand field.
 
-export default function FilterSidebar({ filters, setFilters, maxPrice }) {
-  const toggleArrayValue = (key, value) => {
-    setFilters((prev) => {
-      const values = prev[key].includes(value)
-        ? prev[key].filter((item) => item !== value)
-        : [...prev[key], value];
-      return { ...prev, [key]: values };
+export default function FilterSidebar({ facets, filters, setFilters }) {
+  const priceMin = Math.floor(facets.priceRange?.min ?? 0);
+  const priceMax = Math.ceil(facets.priceRange?.max ?? 500);
+
+  const toggle = (key, value) =>
+    setFilters((prev) => ({ ...prev, [key]: prev[key] === value ? null : value }));
+
+  const reset = () =>
+    setFilters({
+      category: null,
+      articleType: null,
+      colour: null,
+      gender: null,
+      inStock: false,
+      maxPrice: priceMax,
     });
-  };
+
+  const chipRow = (key, values) => (
+    <div className="chip-group">
+      {values.map((value) => (
+        <button
+          key={value}
+          type="button"
+          className={`chip ${filters[key] === value ? "active" : ""}`}
+          onClick={() => toggle(key, value)}
+        >
+          {value}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <aside className="filters">
@@ -18,60 +42,44 @@ export default function FilterSidebar({ filters, setFilters, maxPrice }) {
 
       <div className="filter-block">
         <h4>Category</h4>
-        <div className="chip-group">
-          {categories.map((category) => (
-            <button
-              key={category}
-              type="button"
-              className={`chip ${filters.categories.includes(category) ? "active" : ""}`}
-              onClick={() => toggleArrayValue("categories", category)}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
+        {chipRow("category", facets.categories)}
       </div>
 
       <div className="filter-block">
-        <h4>Brand</h4>
-        <div className="chip-group">
-          {brands.map((brand) => (
-            <button
-              key={brand}
-              type="button"
-              className={`chip ${filters.brands.includes(brand) ? "active" : ""}`}
-              onClick={() => toggleArrayValue("brands", brand)}
-            >
-              {brand}
-            </button>
+        <h4>Gender</h4>
+        {chipRow("gender", facets.genders)}
+      </div>
+
+      <div className="filter-block">
+        <h4>Type</h4>
+        <select
+          value={filters.articleType ?? ""}
+          onChange={(event) =>
+            setFilters((prev) => ({ ...prev, articleType: event.target.value || null }))
+          }
+        >
+          <option value="">All types</option>
+          {facets.articleTypes.map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
           ))}
-        </div>
+        </select>
       </div>
 
       <div className="filter-block">
         <h4>Color</h4>
-        <div className="chip-group">
-          {colors.map((color) => (
-            <button
-              key={color}
-              type="button"
-              className={`chip ${filters.colors.includes(color) ? "active" : ""}`}
-              onClick={() => toggleArrayValue("colors", color)}
-            >
-              {color}
-            </button>
-          ))}
-        </div>
+        {chipRow("colour", facets.colours)}
       </div>
 
       <div className="filter-block">
-        <h4>Max price (${filters.maxPrice})</h4>
+        <h4>Max price (${filters.maxPrice ?? priceMax})</h4>
         <input
           className="range"
           type="range"
-          min={50}
-          max={maxPrice}
-          value={filters.maxPrice}
+          min={priceMin}
+          max={priceMax}
+          value={filters.maxPrice ?? priceMax}
           onChange={(event) =>
             setFilters((prev) => ({ ...prev, maxPrice: Number(event.target.value) }))
           }
@@ -83,24 +91,18 @@ export default function FilterSidebar({ filters, setFilters, maxPrice }) {
         <label className="availability">
           <input
             type="checkbox"
-            checked={filters.inStockOnly}
+            checked={filters.inStock}
             onChange={(event) =>
-              setFilters((prev) => ({ ...prev, inStockOnly: event.target.checked }))
+              setFilters((prev) => ({ ...prev, inStock: event.target.checked }))
             }
           />
           In stock only
         </label>
       </div>
 
-      <button
-        className="reset-btn"
-        onClick={() =>
-          setFilters({ categories: [], brands: [], colors: [], inStockOnly: false, maxPrice })
-        }
-      >
+      <button className="reset-btn" onClick={reset}>
         Reset filters
       </button>
     </aside>
   );
 }
-

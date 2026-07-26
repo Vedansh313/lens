@@ -10,7 +10,7 @@
             <img src={product.image} alt={product.name} />
             <div>
               <p>{product.name}</p>
-              <small>${product.price} • {product.rating}?</small>
+              <small>${product.price} • {product.color}</small>
             </div>
             <button onClick={() => onRemove(product.id)}>Remove</button>
           </article>

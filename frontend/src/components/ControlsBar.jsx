@@ -4,10 +4,10 @@
       <p>{count} results</p>
       <div className="controls-actions">
         <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-          <option value="similarity">Sort by similarity</option>
-          <option value="rating">Sort by rating</option>
+          <option value="relevance">Sort by relevance</option>
           <option value="priceLow">Price: low to high</option>
           <option value="priceHigh">Price: high to low</option>
+          <option value="name">Name: A to Z</option>
         </select>
         <div className="toggle-group" role="group" aria-label="Grid or list view">
           <button

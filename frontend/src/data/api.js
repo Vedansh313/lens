@@ -1,0 +1,98 @@
+// Central API client for the Lens backend (Phase 2).
+// All catalog/search/cart/engagement calls go through here so auth headers and
+// the base URL live in one place.
+
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+
+function authHeaders() {
+  const token = localStorage.getItem("lens-access-token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function buildUrl(path, params) {
+  const url = new URL(`${API_URL}${path}`);
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null && value !== "") {
+        url.searchParams.set(key, value);
+      }
+    }
+  }
+  return url;
+}
+
+async function getJSON(path, params) {
+  const res = await fetch(buildUrl(path, params), {
+    headers: { "ngrok-skip-browser-warning": "true", ...authHeaders() },
+  });
+  if (!res.ok) throw new Error(`GET ${path} -> ${res.status}`);
+  return res.json();
+}
+
+// Normalize a backend product (catalog OR search shape) into the shape the
+// existing UI components read. `match`/`score` are only present on search hits.
+// `brand` is derived from the name for display only — there is no brand field
+// in the dataset (the brand FACET was intentionally dropped).
+export function mapProduct(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    brand: (p.name || "").split(" ")[0],
+    category: p.category,
+    subCategory: p.subCategory,
+    color: p.colour,
+    gender: p.gender,
+    price: p.price,
+    available: p.inStock,
+    image: p.image_url,
+    match: p.match,
+    score: p.score,
+    quantity: p.quantity,
+    subtotal: p.subtotal,
+  };
+}
+
+// ---- Catalog -------------------------------------------------------------
+export function fetchProducts(params) {
+  return getJSON("/products", params);
+}
+
+export function fetchProduct(id) {
+  return getJSON(`/products/${id}`);
+}
+
+export function fetchCategories() {
+  return getJSON("/categories");
+}
+
+export async function fetchAutocomplete(q, limit = 8) {
+  if (!q || q.trim().length < 2) return { suggestions: [] };
+  return getJSON("/autocomplete", { q: q.trim(), limit });
+}
+
+// ---- Hybrid search (image + text + metadata + catalog filters) -----------
+export async function hybridSearch({ query, imageFile, filters = {}, alpha = 0.7, topK = 48 }) {
+  const form = new FormData();
+  if (imageFile) form.append("image", imageFile);
+  if (query) form.append("query", query);
+  form.append("alpha", String(alpha));
+  form.append("top_k", String(topK));
+  const map = {
+    category: filters.category,
+    colour: filters.colour,
+    gender: filters.gender,
+    min_price: filters.minPrice,
+    max_price: filters.maxPrice,
+    in_stock: filters.inStock,
+  };
+  for (const [key, value] of Object.entries(map)) {
+    if (value !== undefined && value !== null && value !== "") form.append(key, String(value));
+  }
+  const res = await fetch(`${API_URL}/api/v1/hybrid-search`, {
+    method: "POST",
+    body: form,
+    headers: { "ngrok-skip-browser-warning": "true", ...authHeaders() },
+  });
+  if (!res.ok) throw new Error(`hybrid-search -> ${res.status}`);
+  return res.json();
+}

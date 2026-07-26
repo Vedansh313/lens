@@ -13,38 +13,43 @@
         </div>
 
         <div className="modal-body">
-          <p className="brand">{product.brand}</p>
+          <p className="brand">{product.category ?? product.brand}</p>
           <h2>{product.name}</h2>
           <p className="price">${product.price}</p>
-          <p className="description">{product.description}</p>
+          {product.description && <p className="description">{product.description}</p>}
 
           <div className="meta-cluster">
             <div>
-              <h4>Sizes</h4>
-              <div className="chip-group">{product.sizes.map((size) => <span key={size} className="chip">{size}</span>)}</div>
-            </div>
-            <div>
-              <h4>Color swatches</h4>
-              <div className="swatches">
-                {product.palette.map((hex) => (
-                  <span key={hex} className="swatch" style={{ backgroundColor: hex }} title={hex} />
-                ))}
+              <h4>Color</h4>
+              <div className="chip-group">
+                {product.color && <span className="chip">{product.color}</span>}
+                {product.gender && <span className="chip">{product.gender}</span>}
               </div>
             </div>
+            {Array.isArray(product.sizes) && product.sizes.length > 0 && (
+              <div>
+                <h4>Sizes</h4>
+                <div className="chip-group">
+                  {product.sizes.map((size) => (
+                    <span key={size} className="chip">{size}</span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="similarity-box">
-            <h4>AI similarity breakdown</h4>
-            {Object.entries(product.similarity).map(([key, value]) => (
-              <div key={key} className="meter-row">
-                <span>{key}</span>
+          {product.match != null && (
+            <div className="similarity-box">
+              <h4>AI match</h4>
+              <div className="meter-row">
+                <span>similarity</span>
                 <div className="meter">
-                  <span style={{ width: `${value}%` }} />
+                  <span style={{ width: `${product.match}%` }} />
                 </div>
-                <strong>{value}%</strong>
+                <strong>{product.match}%</strong>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
 
           <div className="modal-actions">
             <button>Save</button>
