@@ -35,13 +35,16 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Computed,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     Numeric,
     SmallInteger,
     String,
+    UniqueConstraint,
     func,
     text,
 )
@@ -168,4 +171,41 @@ class Product(Base):
         return (
             f"<Product id={self.id} faiss_index={self.faiss_index} "
             f"name={self.product_display_name!r}>"
+        )
+
+
+class CartItem(Base):
+    """One product line in a user's cart (Phase 2).
+
+    At most one row per (user, product) — quantity is bumped instead of adding a
+    second row. Both foreign keys cascade on delete, so removing a user (or a
+    product) cleans up their cart lines automatically.
+    """
+
+    __tablename__ = "cart_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "product_id", name="uq_cart_items_user_product"),
+        CheckConstraint("quantity >= 1", name="ck_cart_items_quantity_positive"),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return (
+            f"<CartItem user={self.user_id} product={self.product_id} "
+            f"qty={self.quantity}>"
         )
