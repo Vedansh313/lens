@@ -47,6 +47,7 @@ from ai.search_system import build_search
 from sqlalchemy import select
 from db import SessionLocal
 from models import Product
+from auth import router as auth_router
 
 # ---------------------------------------------------------------------------
 # Config (override via environment variables)
@@ -168,6 +169,10 @@ app.add_middleware(
 
 IMAGES_DIR.mkdir(exist_ok=True)
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
+
+# Auth endpoints (/auth/register, /login, /refresh, /logout, /me). Separate
+# module; the search pipeline above is untouched.
+app.include_router(auth_router)
 
 
 @app.get("/")
