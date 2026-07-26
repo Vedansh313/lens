@@ -49,6 +49,7 @@ from db import SessionLocal
 from models import Product
 from auth import router as auth_router
 from catalog import router as catalog_router
+from hybrid import build_hybrid_router
 
 # ---------------------------------------------------------------------------
 # Config (override via environment variables)
@@ -176,6 +177,15 @@ app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 app.include_router(auth_router)
 # Catalog endpoints (/products, /products/{id}, /categories). Read-only.
 app.include_router(catalog_router)
+# Hybrid search (/api/v1/hybrid-search): reuses the re-ranker + embed helpers
+# above (injected, not re-imported) and fuses in catalog filters + real pricing.
+app.include_router(
+    build_hybrid_router(
+        rerank_search=rerank_search,
+        embed_image=_embed_image,
+        embed_text=_embed_text,
+    )
+)
 
 
 @app.get("/")
