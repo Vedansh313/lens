@@ -13,22 +13,24 @@ export default function LoginPage({ onLogin, theme, onToggleTheme }) {
     return () => document.body.classList.remove("login-active");
   }, []);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
     setSubmitting(true);
 
-    const session = onLogin(email, password);
-    setSubmitting(false);
-
-    if (!session) {
-      setError("Invalid email or password. Try the demo credentials below.");
+    try {
+      await onLogin(email, password);
+      // On success App swaps this page out for the Dashboard.
+    } catch (err) {
+      setError(err?.message || "Invalid email or password.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const fillDemo = () => {
     setEmail("demo@lens.app");
-    setPassword("demo123");
+    setPassword("demo1234");
     setError("");
   };
 
@@ -120,7 +122,7 @@ export default function LoginPage({ onLogin, theme, onToggleTheme }) {
                 <p className="login-demo-creds">
                   <code>demo@lens.app</code>
                   <span aria-hidden="true"> · </span>
-                  <code>demo123</code>
+                  <code>demo1234</code>
                 </p>
                 <button type="button" className="chip button-chip" onClick={fillDemo}>
                   Use demo credentials
