@@ -209,3 +209,55 @@ class CartItem(Base):
             f"<CartItem user={self.user_id} product={self.product_id} "
             f"qty={self.quantity}>"
         )
+
+
+class WishlistItem(Base):
+    """A product a user has saved (Phase 2). One row per (user, product)."""
+
+    __tablename__ = "wishlist_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "product_id", name="uq_wishlist_items_user_product"),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return f"<WishlistItem user={self.user_id} product={self.product_id}>"
+
+
+class RecentlyViewed(Base):
+    """A product a user recently opened (Phase 2).
+
+    One row per (user, product); re-viewing bumps viewed_at (upsert) instead of
+    inserting a duplicate, so the list stays de-duplicated and most-recent-first.
+    """
+
+    __tablename__ = "recently_viewed"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    viewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "product_id", name="uq_recently_viewed_user_product"),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return f"<RecentlyViewed user={self.user_id} product={self.product_id}>"

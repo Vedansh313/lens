@@ -50,6 +50,7 @@ from models import Product
 from auth import router as auth_router
 from catalog import router as catalog_router
 from cart import router as cart_router
+from engagement import router as engagement_router
 from hybrid import build_hybrid_router
 
 # ---------------------------------------------------------------------------
@@ -180,6 +181,8 @@ app.include_router(auth_router)
 app.include_router(catalog_router)
 # Cart endpoints (/cart ...). Per-user, auth-protected.
 app.include_router(cart_router)
+# Wishlist + recently-viewed endpoints. Per-user, auth-protected.
+app.include_router(engagement_router)
 # Hybrid search (/api/v1/hybrid-search): reuses the re-ranker + embed helpers
 # above (injected, not re-imported) and fuses in catalog filters + real pricing.
 app.include_router(
