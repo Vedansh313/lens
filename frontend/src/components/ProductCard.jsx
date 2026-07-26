@@ -6,6 +6,7 @@
   wished,
   onCompareToggle,
   compared,
+  onAddToCart,
 }) {
   return (
     <article className={`product-card ${viewMode}`}>
@@ -25,9 +26,18 @@
           <span>${product.price}</span>
           <span className="muted">{product.color}</span>
         </div>
-        <button className={`compare-btn ${compared ? "active" : ""}`} onClick={() => onCompareToggle(product)}>
-          {compared ? "Added" : "Compare"}
-        </button>
+        <div className="card-actions">
+          <button
+            className="add-cart-btn"
+            disabled={!product.available}
+            onClick={() => onAddToCart?.(product.id)}
+          >
+            {product.available ? "Add to cart" : "Sold out"}
+          </button>
+          <button className={`compare-btn ${compared ? "active" : ""}`} onClick={() => onCompareToggle(product)}>
+            {compared ? "Added" : "Compare"}
+          </button>
+        </div>
       </div>
     </article>
   );

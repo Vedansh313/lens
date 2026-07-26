@@ -1,4 +1,4 @@
-﻿export default function ProductModal({ product, onClose }) {
+﻿export default function ProductModal({ product, onClose, onAddToCart }) {
   if (!product) return null;
 
   return (
@@ -52,9 +52,16 @@
           )}
 
           <div className="modal-actions">
-            <button>Save</button>
-            <button>Compare</button>
-            <button className="primary">View details</button>
+            <button
+              className="primary"
+              disabled={product.available === false}
+              onClick={() => {
+                onAddToCart?.(product.id);
+                onClose();
+              }}
+            >
+              {product.available === false ? "Sold out" : "Add to cart"}
+            </button>
           </div>
         </div>
       </div>

@@ -31,7 +31,7 @@ const API_SORT = {
   name: "name",
 };
 
-export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
+export default function Dashboard({ user, theme, onToggleTheme, onLogout, cartCount = 0, onAddToCart, onOpenCart }) {
   const [query, setQuery] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
@@ -263,6 +263,9 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
         </nav>
         <div className="nav-actions">
           <span className="user-greeting">Hi, {user.name}</span>
+          <button type="button" className="cart-btn" onClick={onOpenCart}>
+            Cart{cartCount > 0 ? ` (${cartCount})` : ""}
+          </button>
           <button type="button" className="logout-btn" onClick={onLogout}>
             Sign out
           </button>
@@ -321,6 +324,7 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
             onToggleWishlist={toggleWishlist}
             compareList={compareList}
             onCompareToggle={toggleCompare}
+            onAddToCart={onAddToCart}
           />
 
           {!isSearch && total > LIMIT && (
@@ -357,7 +361,11 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout }) {
 
       <footer id="saved">Powered by image embeddings and vector similarity.</footer>
 
-      <ProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />
+      <ProductModal
+        product={selectedProduct}
+        onClose={() => setSelectedProduct(null)}
+        onAddToCart={onAddToCart}
+      />
     </div>
   );
 }

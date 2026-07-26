@@ -20,6 +20,7 @@ export default function ProductGrid(props) {
     onToggleWishlist,
     compareList,
     onCompareToggle,
+    onAddToCart,
   } = props;
 
   if (loading) {
@@ -48,6 +49,7 @@ export default function ProductGrid(props) {
           onToggleWishlist={onToggleWishlist}
           compared={compareList.some((entry) => entry.id === product.id)}
           onCompareToggle={onCompareToggle}
+          onAddToCart={onAddToCart}
         />
       ))}
     </div>

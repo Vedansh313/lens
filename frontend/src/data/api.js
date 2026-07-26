@@ -29,6 +29,20 @@ async function getJSON(path, params) {
   return res.json();
 }
 
+async function sendJSON(method, path, body) {
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true",
+      ...authHeaders(),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}`);
+  return res.json();
+}
+
 // Normalize a backend product (catalog OR search shape) into the shape the
 // existing UI components read. `match`/`score` are only present on search hits.
 // `brand` is derived from the name for display only — there is no brand field
@@ -95,4 +109,21 @@ export async function hybridSearch({ query, imageFile, filters = {}, alpha = 0.7
   });
   if (!res.ok) throw new Error(`hybrid-search -> ${res.status}`);
   return res.json();
+}
+
+// ---- Cart (auth) — every call returns the full updated cart ---------------
+export function getCart() {
+  return getJSON("/cart");
+}
+export function addToCart(productId, quantity = 1) {
+  return sendJSON("POST", "/cart", { product_id: productId, quantity });
+}
+export function updateCartItem(productId, quantity) {
+  return sendJSON("PATCH", `/cart/${productId}`, { quantity });
+}
+export function removeCartItem(productId) {
+  return sendJSON("DELETE", `/cart/${productId}`);
+}
+export function clearCart() {
+  return sendJSON("DELETE", "/cart");
 }

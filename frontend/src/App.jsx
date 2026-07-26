@@ -1,13 +1,17 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import CartPage from "@/components/CartPage";
 import Dashboard from "@/components/Dashboard";
 import LoginPage from "@/components/LoginPage";
 import { SITE_NAME, SITE_TAGLINE } from "@/config/site";
 import { login as apiLogin, logout as apiLogout, getCurrentUser } from "@/data/auth";
+import { useCart } from "@/hooks/useCart";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 export default function App() {
   const [session, setSession] = useLocalStorage("lens-session", null);
   const [theme, setTheme] = useLocalStorage("lens-theme", "light");
+  const [view, setView] = useState("catalog");
+  const cart = useCart();
 
   useEffect(() => {
     document.body.dataset.theme = theme;
@@ -26,6 +30,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Load the cart when signed in; clear it (via a 401) on sign-out.
+  useEffect(() => {
+    cart.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
+
   // Async: awaits the real API. Throws on failure so LoginPage can surface the
   // server's message.
   const handleLogin = async (email, password) => {
@@ -37,14 +47,25 @@ export default function App() {
   const handleLogout = async () => {
     await apiLogout();
     setSession(null);
+    setView("catalog");
   };
 
+  const toggleTheme = () => setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+
   if (!session) {
+    return <LoginPage onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />;
+  }
+
+  if (view === "cart") {
     return (
-      <LoginPage
-        onLogin={handleLogin}
+      <CartPage
+        cart={cart.cart}
+        onSetQuantity={cart.setQuantity}
+        onRemove={cart.remove}
+        onClear={cart.clear}
+        onBack={() => setView("catalog")}
         theme={theme}
-        onToggleTheme={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -53,8 +74,11 @@ export default function App() {
     <Dashboard
       user={session}
       theme={theme}
-      onToggleTheme={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
+      onToggleTheme={toggleTheme}
       onLogout={handleLogout}
+      cartCount={cart.cart.item_count}
+      onAddToCart={cart.add}
+      onOpenCart={() => setView("cart")}
     />
   );
 }
