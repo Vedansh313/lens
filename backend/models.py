@@ -31,8 +31,19 @@ product_metadata.json, not assumed. Null counts at seed time:
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, SmallInteger, String, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Index,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -109,10 +120,21 @@ class Product(Base):
     year: Mapped[int | None] = mapped_column(SmallInteger)  # 1 null; 2007-2019
     usage: Mapped[str | None] = mapped_column(String(32))  # 317 nulls
 
+    # --- Commerce fields (Phase 2) -----------------------------------------
+    # The source fashion dataset carries no price or stock. These are backfilled
+    # deterministically from id (migration f_add_commerce) so values are stable
+    # and reproducible — real enough for catalog sort/filter and cart totals.
+    price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    in_stock: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+
     # Composite index supporting the faceted filtering the storefront will do
     # (category + colour + gender are exactly the re-ranker's boost fields).
     __table_args__ = (
         Index("ix_products_facets", "article_type", "base_colour", "gender"),
+        # Price is a primary sort/filter axis on the catalog page.
+        Index("ix_products_price", "price"),
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
