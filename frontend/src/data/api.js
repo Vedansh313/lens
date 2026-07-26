@@ -2,11 +2,24 @@
 // All catalog/search/cart/engagement calls go through here so auth headers and
 // the base URL live in one place.
 
+import { refreshAccessToken } from "@/data/auth";
+
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 function authHeaders() {
   const token = localStorage.getItem("lens-access-token");
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// fetch that transparently refreshes the access token once on a 401 and retries,
+// so short-lived access tokens expiring mid-session don't break authed calls
+// (cart, wishlist, recently-viewed). The retry re-applies the fresh auth header.
+async function authedFetch(url, options = {}) {
+  let res = await fetch(url, options);
+  if (res.status === 401 && (await refreshAccessToken())) {
+    res = await fetch(url, { ...options, headers: { ...options.headers, ...authHeaders() } });
+  }
+  return res;
 }
 
 function buildUrl(path, params) {
@@ -22,7 +35,7 @@ function buildUrl(path, params) {
 }
 
 async function getJSON(path, params) {
-  const res = await fetch(buildUrl(path, params), {
+  const res = await authedFetch(buildUrl(path, params), {
     headers: { "ngrok-skip-browser-warning": "true", ...authHeaders() },
   });
   if (!res.ok) throw new Error(`GET ${path} -> ${res.status}`);
@@ -30,7 +43,7 @@ async function getJSON(path, params) {
 }
 
 async function sendJSON(method, path, body) {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await authedFetch(`${API_URL}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
@@ -102,7 +115,7 @@ export async function hybridSearch({ query, imageFile, filters = {}, alpha = 0.7
   for (const [key, value] of Object.entries(map)) {
     if (value !== undefined && value !== null && value !== "") form.append(key, String(value));
   }
-  const res = await fetch(`${API_URL}/api/v1/hybrid-search`, {
+  const res = await authedFetch(`${API_URL}/api/v1/hybrid-search`, {
     method: "POST",
     body: form,
     headers: { "ngrok-skip-browser-warning": "true", ...authHeaders() },
@@ -126,4 +139,21 @@ export function removeCartItem(productId) {
 }
 export function clearCart() {
   return sendJSON("DELETE", "/cart");
+}
+
+// ---- Wishlist + recently viewed (auth) ------------------------------------
+export function getWishlist() {
+  return getJSON("/wishlist");
+}
+export function addWishlist(productId) {
+  return sendJSON("POST", "/wishlist", { product_id: productId });
+}
+export function removeWishlist(productId) {
+  return sendJSON("DELETE", `/wishlist/${productId}`);
+}
+export function getRecentlyViewed(limit = 12) {
+  return getJSON("/recently-viewed", { limit });
+}
+export function recordView(productId) {
+  return sendJSON("POST", "/recently-viewed", { product_id: productId });
 }

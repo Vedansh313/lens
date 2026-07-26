@@ -26,13 +26,13 @@
                 {product.gender && <span className="chip">{product.gender}</span>}
               </div>
             </div>
-            {Array.isArray(product.sizes) && product.sizes.length > 0 && (
+            {(product.season || product.year || product.usage) && (
               <div>
-                <h4>Sizes</h4>
+                <h4>Details</h4>
                 <div className="chip-group">
-                  {product.sizes.map((size) => (
-                    <span key={size} className="chip">{size}</span>
-                  ))}
+                  {product.usage && <span className="chip">{product.usage}</span>}
+                  {product.season && <span className="chip">{product.season}</span>}
+                  {product.year && <span className="chip">{product.year}</span>}
                 </div>
               </div>
             )}

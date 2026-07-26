@@ -14,11 +14,13 @@ import { SITE_NAME } from "@/config/site";
 import {
   fetchAutocomplete,
   fetchCategories,
+  fetchProduct,
   fetchProducts,
   hybridSearch,
   mapProduct,
 } from "@/data/api";
 import { trendingSearches } from "@/data/mockData";
+import { useEngagement } from "@/hooks/useEngagement";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
 const LIMIT = 24;
@@ -71,9 +73,10 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout, cartCo
   const [viewMode, setViewMode] = useState("grid");
   const [searchHistory, setSearchHistory] = useLocalStorage("lens-search-history", []);
   const [savedSearches] = useLocalStorage("lens-saved-searches", ["minimal watches", "olive chinos"]);
-  const [wishlist, setWishlist] = useLocalStorage("lens-wishlist", []);
-  const [recentlyViewed, setRecentlyViewed] = useLocalStorage("lens-recently-viewed", []);
   const [compareList, setCompareList] = useState([]);
+
+  // Server-backed wishlist + recently-viewed (per user).
+  const { wishlistIds, recentlyViewed, toggleWishlist, recordView } = useEngagement();
 
   const maxPrice = facets.priceRange?.max ?? 500;
 
@@ -226,18 +229,20 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout, cartCo
     }
   };
 
-  // ---- Product interactions (wishlist/recent stay local until step 7c) ---
-  const handleOpenProduct = (product) => {
-    setSelectedProduct(product);
-    setRecentlyViewed((prev) =>
-      [product, ...prev.filter((entry) => entry.id !== product.id)].slice(0, 6)
-    );
-  };
-
-  const toggleWishlist = (id) => {
-    setWishlist((prev) =>
-      prev.includes(id) ? prev.filter((productId) => productId !== id) : [...prev, id]
-    );
+  // ---- Product interactions ---------------------------------------------
+  const handleOpenProduct = async (product) => {
+    setSelectedProduct(product); // show card data immediately
+    recordView(product.id); // server records the view + refreshes the carousel
+    try {
+      const detail = await fetchProduct(product.id);
+      setSelectedProduct((prev) =>
+        prev && prev.id === product.id
+          ? { ...prev, season: detail.season, year: detail.year, usage: detail.usage }
+          : prev
+      );
+    } catch {
+      /* keep the card-level data if detail fetch fails */
+    }
   };
 
   const toggleCompare = (product) => {
@@ -320,7 +325,7 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout, cartCo
             viewMode={viewMode}
             onOpen={handleOpenProduct}
             loading={loading}
-            wishlist={wishlist}
+            wishlist={wishlistIds}
             onToggleWishlist={toggleWishlist}
             compareList={compareList}
             onCompareToggle={toggleCompare}

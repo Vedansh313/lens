@@ -33,8 +33,9 @@ async function errorMessage(res, fallback) {
 }
 
 // Exchange the stored refresh token for a fresh access token. Returns true on
-// success. Used transparently by getCurrentUser when the access token expires.
-async function refreshAccessToken() {
+// success. Used transparently by getCurrentUser and by api.js's authed fetch
+// wrapper when the access token expires mid-session.
+export async function refreshAccessToken() {
   const refresh_token = localStorage.getItem(REFRESH_KEY);
   if (!refresh_token) return false;
   const res = await fetch(`${API_URL}/auth/refresh`, {
