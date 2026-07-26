@@ -42,6 +42,12 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 from ai.search_system import build_search
 
+# Backend-local (server runs from backend/): product metadata now comes from
+# Postgres instead of product_metadata.json.
+from sqlalchemy import select
+from db import SessionLocal
+from models import Product
+
 # ---------------------------------------------------------------------------
 # Config (override via environment variables)
 # ---------------------------------------------------------------------------
@@ -50,13 +56,59 @@ BASE_DIR = Path(__file__).resolve().parent
 AI_DIR = BASE_DIR.parent / "ai"
 
 INDEX_PATH = Path(os.getenv("INDEX_PATH", AI_DIR / "models" / "product_index.faiss"))
-METADATA_PATH = Path(os.getenv("METADATA_PATH", AI_DIR / "models" / "product_metadata.json"))
 WEIGHTS_PATH = Path(os.getenv("CLIP_WEIGHTS", AI_DIR / "models" / "clip_finetuned.pt"))
 IMAGES_DIR = Path(os.getenv("IMAGES_DIR", BASE_DIR / "images"))
 # Base URL used to build image_url values returned to the frontend.
 IMAGE_BASE_URL = os.getenv("IMAGE_BASE_URL", "http://localhost:8000")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+# ---------------------------------------------------------------------------
+# Product metadata (from Postgres — replaces pd.read_json(product_metadata.json))
+# ---------------------------------------------------------------------------
+# search_system consumes the dataset's original camelCase column names; the DB
+# stores snake_case, so we rename on the way out.
+_DB_TO_DF_COLUMNS = {
+    Product.id: "id",
+    Product.product_display_name: "productDisplayName",
+    Product.master_category: "masterCategory",
+    Product.sub_category: "subCategory",
+    Product.article_type: "articleType",
+    Product.base_colour: "baseColour",
+    Product.gender: "gender",
+    Product.season: "season",
+    Product.year: "year",
+    Product.usage: "usage",
+}
+
+
+def _load_metadata_df() -> pd.DataFrame:
+    """Load product metadata from Postgres, ordered so row i == FAISS vector i.
+
+    ai.search_system resolves FAISS hits positionally (`df.iloc[idx]`), so the
+    DataFrame's row order IS the contract. Ordering by faiss_index reproduces
+    the exact order product_metadata.json was in, and the assertion below refuses
+    to serve if that order is not a clean 0..n-1 sequence — the same paranoia the
+    seed script applies, enforced again at load time.
+    """
+    columns = list(_DB_TO_DF_COLUMNS.values())
+    stmt = select(Product.faiss_index, *_DB_TO_DF_COLUMNS).order_by(Product.faiss_index)
+    with SessionLocal() as session:
+        rows = session.execute(stmt).all()
+
+    df = pd.DataFrame(rows, columns=["faiss_index", *columns])
+
+    # After ORDER BY faiss_index, the default 0..n-1 RangeIndex must equal the
+    # faiss_index values — otherwise df.iloc[idx] would not resolve FAISS vector
+    # idx and every result would be quietly wrong.
+    if df["faiss_index"].tolist() != list(range(len(df))):
+        raise RuntimeError(
+            "products.faiss_index is not a contiguous 0..n-1 sequence; "
+            "FAISS<->DB alignment cannot be trusted. Re-run backend/seed.py."
+        )
+    return df.drop(columns="faiss_index")
+
 
 # ---------------------------------------------------------------------------
 # Load models + data once at import time
@@ -74,8 +126,8 @@ model = model.float()  # weights were fine-tuned in float32
 model.eval()
 
 index = faiss.read_index(str(INDEX_PATH))
-df = pd.read_json(METADATA_PATH)
-print(f"[lens] loaded {index.ntotal} vectors / {len(df)} metadata rows")
+df = _load_metadata_df()
+print(f"[lens] loaded {index.ntotal} vectors / {len(df)} metadata rows (from DB)")
 
 # The certified higher-scoring re-ranker (parse_query + metadata boosts).
 rerank_search = build_search(model, preprocess, DEVICE, index, df)
