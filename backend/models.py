@@ -293,12 +293,38 @@ class Address(Base):
     )
 
 
+# The complete set of order statuses (Phase 4). Kept here so the DB CHECK
+# constraint below and the transition rules in orders.py are driven by one
+# definition and cannot drift apart.
+#
+#   pending    created, not yet successfully paid
+#   paid       payment succeeded, not yet dispatched
+#   shipped    dispatched to the customer
+#   delivered  received by the customer
+#   cancelled  ended before dispatch (customer or admin)
+#   returned   a delivered order the customer sent back
+#   refunded   money returned; terminal, reachable from cancelled/returned
+ORDER_STATUSES = (
+    "pending",
+    "paid",
+    "shipped",
+    "delivered",
+    "cancelled",
+    "returned",
+    "refunded",
+)
+
+
 class Order(Base):
     """An order created from a user's cart at checkout (Phase 3).
 
     The shipping address is stored as a JSONB snapshot and each line's price is
     snapshotted in order_items, so a placed order is immutable regardless of
-    later product/address/price changes. status: pending -> paid.
+    later product/address/price changes.
+
+    status moves through ORDER_STATUSES above; every change is appended to
+    order_status_history (Phase 4) so the customer-facing timeline and any
+    audit question can be answered from the record rather than inferred.
     """
 
     __tablename__ = "orders"
@@ -323,11 +349,33 @@ class Order(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    # Lifecycle timestamps (Phase 4). Each is set once, when the order first
+    # enters that state; status alone cannot answer "when did it ship?" and
+    # these also feed the fulfilment figures in the analytics endpoints.
+    shipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_reason: Mapped[str | None] = mapped_column(String(255))
+    # A return is *requested* by the customer and then approved by an admin,
+    # so the request time is recorded separately from the status change.
+    return_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    return_reason: Mapped[str | None] = mapped_column(String(255))
+
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan", order_by="OrderItem.id"
     )
     payments: Mapped[list["Payment"]] = relationship(
         back_populates="order", cascade="all, delete-orphan", order_by="Payment.id"
+    )
+    status_history: Mapped[list["OrderStatusHistory"]] = relationship(
+        back_populates="order", cascade="all, delete-orphan", order_by="OrderStatusHistory.id"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN " + str(ORDER_STATUSES),
+            name="ck_orders_status_valid",
+        ),
     )
 
 
@@ -365,12 +413,56 @@ class Payment(Base):
         ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
     )
     method: Mapped[str] = mapped_column(String(16), nullable=False)  # upi | card | wallet
-    status: Mapped[str] = mapped_column(String(16), nullable=False)  # success | failed
+    # success | failed | refunded — a successful payment becomes 'refunded'
+    # in place rather than gaining a second row, so at most one payment per
+    # order ever counts as money received (see orders.py:_latest_payment_status).
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     transaction_ref: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     detail: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # Refund bookkeeping (Phase 4). Simulated like the original charge: no
+    # funds move, but the reference makes the refund traceable in the UI.
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    refund_ref: Mapped[str | None] = mapped_column(String(64))
 
     order: Mapped["Order"] = relationship(back_populates="payments")
+
+
+class OrderStatusHistory(Base):
+    """One recorded status change for an order (Phase 4).
+
+    Append-only: rows are never updated or deleted, so the sequence is the
+    order's audit trail and the source for the customer-facing timeline.
+    from_status is NULL only for the row recording the order's creation.
+    changed_by_user_id is the admin who acted, or NULL when the change came
+    from the customer or from the system (e.g. payment success).
+    """
+
+    __tablename__ = "order_status_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    from_status: Mapped[str | None] = mapped_column(String(32))
+    to_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(255))
+    # SET NULL, not CASCADE: deleting an admin must not erase the history of
+    # orders they touched.
+    changed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    order: Mapped["Order"] = relationship(back_populates="status_history")
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return (
+            f"<OrderStatusHistory order={self.order_id} "
+            f"{self.from_status} -> {self.to_status}>"
+        )
