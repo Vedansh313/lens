@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+import lifecycle
 from auth import get_current_user, get_db
 from checkout import serialize_order
 from models import CartItem, Order, Payment, Product, User
@@ -161,7 +162,8 @@ def pay_order(
         amount=order.total, transaction_ref=txn_ref, detail=detail,
     )
     db.add(payment)
-    order.status = "paid"
+    # Records the pending -> paid history row as well as setting the status.
+    lifecycle.transition(order, "paid", note=f"Payment {txn_ref} succeeded")
     db.execute(delete(CartItem).where(CartItem.user_id == user.id))  # clear the cart
     db.commit()
     db.refresh(order)

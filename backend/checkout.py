@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import lifecycle
 import pricing
 from auth import get_current_user, get_db
 from models import Address, CartItem, Order, OrderItem, Product, User
@@ -78,6 +79,15 @@ def serialize_order(order: Order) -> dict:
         "total": float(order.total),
         "coupon_code": order.coupon_code,
         "created_at": order.created_at.isoformat() if order.created_at else None,
+        # Lifecycle (Phase 4). Null until the order reaches that state.
+        "shipped_at": order.shipped_at.isoformat() if order.shipped_at else None,
+        "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
+        "cancelled_at": order.cancelled_at.isoformat() if order.cancelled_at else None,
+        "cancel_reason": order.cancel_reason,
+        "return_requested_at": (
+            order.return_requested_at.isoformat() if order.return_requested_at else None
+        ),
+        "return_reason": order.return_reason,
         "items": [
             {
                 "product_id": i.product_id,
@@ -213,6 +223,9 @@ def checkout(body: CheckoutIn, user: User = Depends(get_current_user), db: Sessi
                 line_total=pricing.money(p.price * ci.quantity),
             )
         )
+    # Open the audit trail at creation, so every order has a history from its
+    # first moment rather than one inferred later (Phase 4).
+    lifecycle.record_creation(order)
     db.add(order)
     db.commit()
     db.refresh(order)
