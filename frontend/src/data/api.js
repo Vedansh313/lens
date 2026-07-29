@@ -198,3 +198,14 @@ export function listOrders() {
 export function getOrder(orderId) {
   return getJSON(`/orders/${orderId}`);
 }
+
+// Lifecycle actions. Both return the full updated order (same shape as
+// getOrder), so the caller can drop the response straight into its detail
+// cache. The server rejects an illegal move with a 409 whose message is
+// surfaced by sendJSON.
+export function cancelOrder(orderId, reason) {
+  return sendJSON("POST", `/orders/${orderId}/cancel`, { reason: reason || null });
+}
+export function requestReturn(orderId, reason) {
+  return sendJSON("POST", `/orders/${orderId}/return`, { reason: reason || null });
+}
