@@ -4,6 +4,7 @@ import CheckoutPage from "@/components/CheckoutPage";
 import ConfirmationPage from "@/components/ConfirmationPage";
 import Dashboard from "@/components/Dashboard";
 import LoginPage from "@/components/LoginPage";
+import OrdersPage from "@/components/OrdersPage";
 import { SITE_NAME, SITE_TAGLINE } from "@/config/site";
 import {
   AUTH_EXPIRED_EVENT,
@@ -108,6 +109,12 @@ export default function App() {
     );
   }
 
+  if (view === "orders") {
+    return (
+      <OrdersPage onBack={() => setView("catalog")} theme={theme} onToggleTheme={toggleTheme} />
+    );
+  }
+
   if (view === "confirmation") {
     return (
       <ConfirmationPage
@@ -131,6 +138,7 @@ export default function App() {
       cartCount={cart.cart.item_count}
       onAddToCart={cart.add}
       onOpenCart={() => setView("cart")}
+      onOpenOrders={() => setView("orders")}
     />
   );
 }

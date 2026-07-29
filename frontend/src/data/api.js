@@ -188,3 +188,13 @@ export function payOrder(orderId, payload) {
 export function getInvoice(orderId) {
   return getJSON(`/orders/${orderId}/invoice`);
 }
+
+// ---- Order history (auth) -------------------------------------------------
+// listOrders returns { orders: [...] } — summary rows, newest first.
+// getOrder returns the full order (items, shipping_address, totals, payments).
+export function listOrders() {
+  return getJSON("/orders");
+}
+export function getOrder(orderId) {
+  return getJSON(`/orders/${orderId}`);
+}

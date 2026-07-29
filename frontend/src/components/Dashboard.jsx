@@ -33,7 +33,16 @@ const API_SORT = {
   name: "name",
 };
 
-export default function Dashboard({ user, theme, onToggleTheme, onLogout, cartCount = 0, onAddToCart, onOpenCart }) {
+export default function Dashboard({
+  user,
+  theme,
+  onToggleTheme,
+  onLogout,
+  cartCount = 0,
+  onAddToCart,
+  onOpenCart,
+  onOpenOrders,
+}) {
   const [query, setQuery] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
@@ -268,6 +277,9 @@ export default function Dashboard({ user, theme, onToggleTheme, onLogout, cartCo
         </nav>
         <div className="nav-actions">
           <span className="user-greeting">Hi, {user.name}</span>
+          <button type="button" className="cart-btn" onClick={onOpenOrders}>
+            Orders
+          </button>
           <button type="button" className="cart-btn" onClick={onOpenCart}>
             Cart{cartCount > 0 ? ` (${cartCount})` : ""}
           </button>

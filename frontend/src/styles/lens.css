@@ -808,3 +808,62 @@ body[data-theme="dark"] .login-submit {
   .controls-bar { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
 }
 
+
+/* --- Phase 4: order history --------------------------------------------- */
+.orders-page { max-width: 1000px; margin: 0 auto; padding: 32px 24px 64px; }
+.orders-error { color: #c0392b; }
+
+.orders-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.order-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 16px 18px;
+}
+.order-card-head {
+  display: grid;
+  grid-template-columns: 1.4fr 1.6fr auto auto;
+  gap: 16px;
+  align-items: center;
+}
+.order-number { margin: 0; font-weight: 700; }
+.order-card-id p { margin: 0; }
+.order-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.order-card-total { font-weight: 700; font-size: 1.05rem; white-space: nowrap; }
+
+/* Base pill; per-status colours below. Unknown statuses fall back to this. */
+.order-status {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  background: var(--surface-2);
+  color: var(--text);
+}
+.order-status.paid { background: #2e7d32; color: #fff; }
+.order-status.pending { background: #b26a00; color: #fff; }
+
+.order-detail { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.order-items { list-style: none; margin: 0 0 20px; padding: 0; }
+.order-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.order-item-name { font-weight: 600; }
+.order-detail-cols { display: grid; grid-template-columns: 1fr 300px; gap: 32px; align-items: start; }
+.order-detail-cols h4 { margin: 0 0 6px; }
+.order-detail-cols p { margin: 2px 0; }
+.order-payments { margin-top: 20px; }
+.order-payments h4 { margin: 0 0 6px; }
+.order-payments p { margin: 2px 0; }
+.order-txn { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; }
+
+@media (max-width: 820px) {
+  .order-card-head { grid-template-columns: 1fr auto; }
+  .order-detail-cols { grid-template-columns: 1fr; }
+}
