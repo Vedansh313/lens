@@ -5,7 +5,12 @@ import ConfirmationPage from "@/components/ConfirmationPage";
 import Dashboard from "@/components/Dashboard";
 import LoginPage from "@/components/LoginPage";
 import { SITE_NAME, SITE_TAGLINE } from "@/config/site";
-import { login as apiLogin, logout as apiLogout, getCurrentUser } from "@/data/auth";
+import {
+  AUTH_EXPIRED_EVENT,
+  login as apiLogin,
+  logout as apiLogout,
+  getCurrentUser,
+} from "@/data/auth";
 import { useCart } from "@/hooks/useCart";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
@@ -30,6 +35,20 @@ export default function App() {
       .then((user) => setSession(user ?? null))
       .catch(() => {});
     // Run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A refresh token rejected mid-session (expired, or the account was removed)
+  // is unrecoverable: drop the session so the login screen renders, instead of
+  // leaving a signed-in-looking UI whose every request 401s. Reset the view too,
+  // so signing back in doesn't drop the user onto a stale checkout page.
+  useEffect(() => {
+    const onExpired = () => {
+      setSession(null);
+      setView("catalog");
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

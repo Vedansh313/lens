@@ -6,6 +6,12 @@ const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const ACCESS_KEY = "lens-access-token";
 const REFRESH_KEY = "lens-refresh-token";
 
+// Dispatched when a refresh token we *had* is rejected — i.e. the session died
+// mid-use rather than the user never having been signed in. App listens for it
+// and drops the session, so an expired refresh token sends the user to the
+// login screen instead of leaving a signed-in-looking UI where every call 401s.
+export const AUTH_EXPIRED_EVENT = "lens-auth-expired";
+
 export function getAccessToken() {
   return localStorage.getItem(ACCESS_KEY);
 }
@@ -35,15 +41,30 @@ async function errorMessage(res, fallback) {
 // Exchange the stored refresh token for a fresh access token. Returns true on
 // success. Used transparently by getCurrentUser and by api.js's authed fetch
 // wrapper when the access token expires mid-session.
+//
+// On a *rejected* refresh token the session is unrecoverable, so tokens are
+// dropped and AUTH_EXPIRED_EVENT is fired. Absence of a refresh token is not
+// an expiry — there was no session to lose — so it returns false quietly.
+// A network failure also stays quiet: a transient outage must not sign the
+// user out (same reasoning as App's mount-time revalidation).
 export async function refreshAccessToken() {
   const refresh_token = localStorage.getItem(REFRESH_KEY);
   if (!refresh_token) return false;
-  const res = await fetch(`${API_URL}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token }),
-  });
-  if (!res.ok) return false;
+  let res;
+  try {
+    res = await fetch(`${API_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token }),
+    });
+  } catch {
+    return false;
+  }
+  if (!res.ok) {
+    clearTokens();
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    return false;
+  }
   setTokens(await res.json());
   return true;
 }
