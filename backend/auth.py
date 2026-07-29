@@ -80,6 +80,25 @@ def get_current_user(
     return user
 
 
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    """Resolve the caller and require users.is_admin, or raise 403 (Phase 4).
+
+    403, not 401: the caller proved who they are, they simply are not allowed.
+    Returning 401 here would tell the frontend to try refreshing its token,
+    which would loop without ever fixing anything.
+
+    Attach to a whole router so nothing behind it can be left ungated by
+    accident:
+        APIRouter(prefix="/admin", dependencies=[Depends(require_admin)])
+    """
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access is required for this action.",
+        )
+    return user
+
+
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------

@@ -47,6 +47,7 @@ from ai.search_system import build_search
 from sqlalchemy import select
 from db import SessionLocal
 from models import Product
+from admin import router as admin_router
 from auth import router as auth_router
 from catalog import router as catalog_router
 from cart import router as cart_router
@@ -192,6 +193,8 @@ app.include_router(checkout_router)
 app.include_router(payments_router)
 # Order retrieval + invoice (/orders, /orders/{id}, /orders/{id}/invoice).
 app.include_router(orders_router)
+# Admin order management (/admin/...). Every route requires is_admin.
+app.include_router(admin_router)
 # Hybrid search (/api/v1/hybrid-search): reuses the re-ranker + embed helpers
 # above (injected, not re-imported) and fuses in catalog filters + real pricing.
 app.include_router(
