@@ -100,6 +100,12 @@ def _load_metadata_df() -> pd.DataFrame:
     the exact order product_metadata.json was in, and the assertion below refuses
     to serve if that order is not a clean 0..n-1 sequence — the same paranoia the
     seed script applies, enforced again at load time.
+
+    DO NOT add an is_active filter here (Phase 4). Soft-deleted products must
+    still occupy their row: dropping one shifts every later position and breaks
+    the alignment this frame exists to guarantee — the assertion below would
+    then refuse to boot, which is the good outcome. Inactive products are kept
+    out of RESULTS instead, at the DB join in hybrid.py and in catalog.py.
     """
     columns = list(_DB_TO_DF_COLUMNS.values())
     stmt = select(Product.faiss_index, *_DB_TO_DF_COLUMNS).order_by(Product.faiss_index)

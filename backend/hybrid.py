@@ -80,7 +80,12 @@ def build_hybrid_router(
         score_by_id = {r["id"]: r["score"] for r in ranked}
 
         # Stage 2 — enrich with real catalog data and apply commerce filters.
-        filters = [Product.id.in_(ranked_ids)]
+        # is_active is enforced HERE rather than upstream: the FAISS index still
+        # contains a vector for a soft-deleted product (its row must stay put to
+        # preserve positional alignment), so the AI stage can and will rank it.
+        # Dropping it at the DB join is what keeps it out of results, with the
+        # search pipeline untouched.
+        filters = [Product.id.in_(ranked_ids), Product.is_active.is_(True)]
         if category:
             filters.append(Product.master_category == category)
         if colour:

@@ -138,6 +138,21 @@ class Product(Base):
     # in_stock = (stock_quantity > 0) in sync.
     stock_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
+    # Soft delete (Phase 4). Admin "delete" clears this flag; the ROW STAYS.
+    #
+    # A hard DELETE is forbidden and always will be: faiss_index must remain a
+    # contiguous 0..n-1 sequence (see the module docstring), and server.py
+    # asserts exactly that at startup. Removing a row shifts every later
+    # position, so the next boot either raises or — worse, if the assert were
+    # ever removed — silently returns the wrong product for every image query.
+    #
+    # Inactive products are filtered out of catalog and search RESULTS, but are
+    # deliberately still loaded into the metadata DataFrame, because that
+    # frame's row order IS the FAISS alignment.
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+
     # --- Full-text search (Phase 2 step 3) ---------------------------------
     # STORED generated column over name + article type + colour, kept in sync
     # automatically. Must use the immutable 'english'::regconfig form (a plain

@@ -87,7 +87,10 @@ def list_products(
     match. With no explicit sort, results come back by relevance; an explicit
     price/name sort still wins.
     """
-    filters = []
+    # Soft-deleted products never appear in the storefront (Phase 4). The rows
+    # still exist — they must, for FAISS alignment — so every customer-facing
+    # query filters them out explicitly.
+    filters = [Product.is_active.is_(True)]
     if category:
         filters.append(Product.master_category == category)
     if article_type:
@@ -140,7 +143,9 @@ def list_products(
 @router.get("/products/{product_id}")
 def get_product(product_id: int, db: Session = Depends(get_db)) -> dict:
     product = db.get(Product, product_id)
-    if product is None:
+    # A soft-deleted product is gone as far as the storefront is concerned —
+    # 404, not a visible-but-unbuyable page.
+    if product is None or not product.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
     return serialize_product_detail(product)
 
@@ -151,11 +156,20 @@ def categories(db: Session = Depends(get_db)) -> dict:
 
     def distinct(column) -> list[str]:
         rows = db.execute(
-            select(column).where(column.is_not(None)).distinct().order_by(column)
+            select(column)
+            .where(column.is_not(None), Product.is_active.is_(True))
+            .distinct()
+            .order_by(column)
         ).all()
         return [value for (value,) in rows]
 
-    lo, hi = db.execute(select(func.min(Product.price), func.max(Product.price))).one()
+    # Price range spans active products only, so the slider cannot bracket a
+    # range the catalog can no longer fill.
+    lo, hi = db.execute(
+        select(func.min(Product.price), func.max(Product.price)).where(
+            Product.is_active.is_(True)
+        )
+    ).one()
     return {
         "categories": distinct(Product.master_category),
         "articleTypes": distinct(Product.article_type),
@@ -180,7 +194,8 @@ def autocomplete(
             or_(
                 Product.product_display_name.op("%")(q),         # fuzzy
                 Product.product_display_name.ilike(f"{q}%"),     # prefix
-            )
+            ),
+            Product.is_active.is_(True),
         )
         .group_by(Product.product_display_name)
         .order_by(similarity.desc())
