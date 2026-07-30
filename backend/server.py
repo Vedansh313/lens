@@ -53,6 +53,7 @@ from catalog import router as catalog_router
 from cart import router as cart_router
 from checkout import router as checkout_router
 from engagement import router as engagement_router
+from inventory import router as inventory_router
 from orders import router as orders_router
 from payments import router as payments_router
 from hybrid import build_hybrid_router
@@ -201,6 +202,8 @@ app.include_router(payments_router)
 app.include_router(orders_router)
 # Admin order management (/admin/...). Every route requires is_admin.
 app.include_router(admin_router)
+# Inventory management (/admin/inventory/...). Also gated on is_admin.
+app.include_router(inventory_router)
 # Hybrid search (/api/v1/hybrid-search): reuses the re-ranker + embed helpers
 # above (injected, not re-imported) and fuses in catalog filters + real pricing.
 app.include_router(

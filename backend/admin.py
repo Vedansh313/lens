@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from decimal import Decimal
 
+import inventory
 import lifecycle
 from auth import get_db, require_admin
 from catalog import serialize_product_detail
@@ -269,7 +270,11 @@ def list_products_admin(
 
 
 @router.post("/products", status_code=status.HTTP_201_CREATED)
-def create_product(body: ProductIn, db: Session = Depends(get_db)) -> dict:
+def create_product(
+    body: ProductIn,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
     """Create a product.
 
     id and faiss_index are both assigned server-side as max + 1. The id is not
@@ -279,36 +284,74 @@ def create_product(body: ProductIn, db: Session = Depends(get_db)) -> dict:
     The result is text- and catalog-searchable but NOT image-searchable: no
     CLIP vector exists for it, so FAISS cannot return it. See the block comment
     above.
+
+    The row is created empty and any opening stock is then applied through
+    inventory.adjust_stock, so a product created with stock has a ledger that
+    reconciles from 0 rather than starting at an unexplained number. (Seeded
+    products cannot have this — their quantities predate the ledger.)
     """
+    fields = body.model_dump()
+    opening_stock = fields.pop("stock_quantity")
+
     next_id = (db.scalar(select(func.max(Product.id))) or 0) + 1
     next_faiss = (db.scalar(select(func.max(Product.faiss_index))) or -1) + 1
 
     product = Product(
         id=next_id,
         faiss_index=next_faiss,
-        in_stock=body.stock_quantity > 0,
+        stock_quantity=0,
+        in_stock=False,
         is_active=True,
-        **body.model_dump(),
+        **fields,
     )
     db.add(product)
+    if opening_stock:
+        # flush so the row exists for adjust_stock's SELECT ... FOR UPDATE;
+        # still the same transaction, so a failure here creates nothing.
+        db.flush()
+        inventory.adjust_stock(
+            db, product.id, opening_stock,
+            source="manual", reason="Opening stock at product creation",
+            actor_id=admin.id,
+        )
     db.commit()
     db.refresh(product)
     return _admin_product(product)
 
 
 @router.patch("/products/{product_id}")
-def update_product(product_id: int, body: ProductPatch, db: Session = Depends(get_db)) -> dict:
-    """Update catalogue/commerce fields. faiss_index and id are not editable."""
+def update_product(
+    product_id: int,
+    body: ProductPatch,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Update catalogue/commerce fields. faiss_index and id are not editable.
+
+    A stock_quantity here is applied through inventory.adjust_stock rather than
+    assigned, so editing stock from the product form still lands in the ledger —
+    otherwise this route would be a hole in the audit trail. Prefer
+    POST /admin/inventory/{id}/adjust, which requires a reason and takes a
+    relative delta; this path records a generic one.
+    """
     product = db.get(Product, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
     changes = body.model_dump(exclude_unset=True)
+    new_stock = changes.pop("stock_quantity", None)
     for field, value in changes.items():
         setattr(product, field, value)
-    # Keep the two stock fields consistent, exactly as the payment path does.
-    if "stock_quantity" in changes:
-        product.in_stock = product.stock_quantity > 0
+
+    if new_stock is not None and new_stock != product.stock_quantity:
+        inventory.adjust_stock(
+            db,
+            product_id,
+            new_stock - product.stock_quantity,
+            source="manual",
+            reason="Set from the admin product form",
+            actor_id=admin.id,
+        )
 
     db.commit()
     db.refresh(product)

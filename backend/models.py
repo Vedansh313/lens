@@ -134,8 +134,13 @@ class Product(Base):
         Boolean, nullable=False, default=True, server_default=text("true")
     )
     # Units on hand (Phase 3). Backfilled deterministically from id, consistent
-    # with in_stock (0 when out of stock). Checkout decrements it and keeps
-    # in_stock = (stock_quantity > 0) in sync.
+    # with in_stock (0 when out of stock).
+    #
+    # Stock comes off at PAYMENT, not at checkout: payments.py locks each row
+    # and decrements only on a successful charge, so an abandoned order never
+    # holds stock. lifecycle.restock puts it back on cancel/return. Every write
+    # site must keep in_stock = (stock_quantity > 0) in sync, and every write
+    # site records a StockAdjustment row (Phase 4 step 7).
     stock_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Soft delete (Phase 4). Admin "delete" clears this flag; the ROW STAYS.
@@ -480,4 +485,75 @@ class OrderStatusHistory(Base):
         return (
             f"<OrderStatusHistory order={self.order_id} "
             f"{self.from_status} -> {self.to_status}>"
+        )
+
+
+# Where a stock movement came from. Kept as a plain string (like ORDER_STATUSES)
+# rather than a DB enum so adding a source later is a code change, not a
+# migration that rewrites the table.
+STOCK_SOURCES = ("manual", "sale", "restock")
+
+
+class StockAdjustment(Base):
+    """One recorded change to products.stock_quantity (Phase 4, step 7).
+
+    Append-only ledger, the same contract as OrderStatusHistory: rows are never
+    updated or deleted, so replaying delta in created_at order reproduces the
+    current stock_quantity exactly. That reconciliation only holds because EVERY
+    write site records here — manual admin adjustments (inventory.py), the
+    decrement at payment (payments.py) and the return on cancel/return
+    (lifecycle.py). A future write site that skips this table silently breaks
+    the ledger, which is why inventory.adjust_stock is the only supported way to
+    change the column.
+
+    quantity_before/after are stored rather than derived so a row is readable on
+    its own and a gap in the ledger is detectable instead of invisible.
+
+    order_id is set for 'sale' and 'restock' rows and NULL for 'manual' ones,
+    which is what lets an admin trace a unit from the shelf to the order that
+    took it.
+    """
+
+    __tablename__ = "stock_adjustments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # CASCADE is safe here in a way it is not for products: a product row is
+    # never hard-deleted (see the Product docstring), so this never fires.
+    # No index=True: the (product_id, created_at) composite below already covers
+    # lookups by product, and a second single-column index would just be write
+    # cost on an append-only table.
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    # Signed: negative removes units, positive adds them. Never zero — a no-op
+    # adjustment is rejected rather than recorded.
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    quantity_before: Mapped[int] = mapped_column(Integer, nullable=False)
+    quantity_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(255))
+    # SET NULL for the same reason as OrderStatusHistory: deleting an admin must
+    # not erase the record of the stock they moved. NULL also means "the system
+    # did this", which is the case for every 'sale' and 'restock' row.
+    changed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("delta <> 0", name="ck_stock_adjustments_delta_nonzero"),
+        CheckConstraint("quantity_after >= 0", name="ck_stock_adjustments_after_nonneg"),
+        # The ledger is always read newest-first for one product.
+        Index("ix_stock_adjustments_product_created", "product_id", "created_at"),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return (
+            f"<StockAdjustment product={self.product_id} {self.delta:+d} "
+            f"({self.quantity_before}->{self.quantity_after}) {self.source}>"
         )

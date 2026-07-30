@@ -23,10 +23,11 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+import inventory
 import lifecycle
 from auth import get_current_user, get_db
 from checkout import serialize_order
-from models import CartItem, Order, Payment, Product, User
+from models import CartItem, Order, Payment, User
 
 router = APIRouter(tags=["payments"])
 
@@ -135,27 +136,25 @@ def pay_order(
         )
 
     # --- Success path: everything below commits as one transaction. ---
-    # Re-check + lock stock right before decrementing (guards against selling
-    # out between checkout and payment).
-    to_decrement = []
-    for item in order.items:
+    # Take the stock here, not at checkout, so an abandoned order never holds
+    # units. adjust_stock locks each row before the read-modify-write, which is
+    # what guards against two customers both buying the last one, and records a
+    # ledger row tying the units to this order.
+    #
+    # Sorted by product id so concurrent payments sharing products always lock
+    # in the same order and cannot deadlock. Nothing is committed until the end,
+    # so a 409 from any line rolls the whole payment back.
+    for item in sorted(order.items, key=lambda i: (i.product_id is None, i.product_id or 0)):
         if item.product_id is None:
             continue  # product was deleted since the order was placed
-        product = db.scalar(
-            select(Product).where(Product.id == item.product_id).with_for_update()
+        inventory.adjust_stock(
+            db,
+            item.product_id,
+            -item.quantity,
+            source="sale",
+            reason=f"Order {order.order_number} paid",
+            order_id=order.id,
         )
-        if product is None:
-            continue
-        if product.stock_quantity < item.quantity:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Insufficient stock for {item.product_name}.",
-            )
-        to_decrement.append((product, item.quantity))
-
-    for product, qty in to_decrement:
-        product.stock_quantity -= qty
-        product.in_stock = product.stock_quantity > 0
 
     payment = Payment(
         order_id=order.id, method=body.method, status="success",

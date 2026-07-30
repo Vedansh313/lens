@@ -18,10 +18,11 @@ from __future__ import annotations
 import uuid
 
 from fastapi import HTTPException, status as http_status
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models import Order, OrderStatusHistory, Payment, Product
+import inventory
+from models import Order, OrderStatusHistory, Payment
 
 # from_status -> the statuses it may move to. A status absent from a value set
 # is unreachable from that state; 'refunded' is terminal.
@@ -112,25 +113,35 @@ def stock_was_taken(order: Order) -> bool:
     return any(p.status == "success" for p in order.payments)
 
 
-def restock(db: Session, order: Order) -> list[tuple[int, int]]:
+def restock(db: Session, order: Order, *, actor_id: int | None = None) -> list[tuple[int, int]]:
     """Return this order's quantities to product stock. Returns (product_id, qty).
 
-    Rows are locked before update for the same reason payments.py locks them on
-    the way down — two concurrent cancels must not interleave a read-modify-write.
-    Lines whose product was deleted since the order (product_id NULL) are skipped.
+    Delegates to inventory.adjust_stock so the units coming back are recorded in
+    the stock ledger and can be traced to this order, rather than the number
+    just moving. That helper takes the FOR UPDATE lock — two concurrent cancels
+    must not interleave a read-modify-write.
+
+    Lines whose product was deleted since the order (product_id NULL) are
+    skipped, as are lines whose product row has since disappeared.
     """
     restocked: list[tuple[int, int]] = []
-    for item in order.items:
+    # Sorted by product id so two orders sharing products always take their
+    # locks in the same order and cannot deadlock against each other.
+    for item in sorted(order.items, key=lambda i: (i.product_id is None, i.product_id or 0)):
         if item.product_id is None:
             continue
-        product = db.scalar(
-            select(Product).where(Product.id == item.product_id).with_for_update()
+        result = inventory.adjust_stock(
+            db,
+            item.product_id,
+            item.quantity,
+            source="restock",
+            reason=f"Order {order.order_number} {order.status}",
+            actor_id=actor_id,
+            order_id=order.id,
         )
-        if product is None:
+        if result is None:
             continue
-        product.stock_quantity += item.quantity
-        product.in_stock = product.stock_quantity > 0
-        restocked.append((product.id, item.quantity))
+        restocked.append((item.product_id, item.quantity))
     return restocked
 
 
@@ -165,7 +176,7 @@ def unwind(
     """
     if not stock_was_taken(order):
         return None
-    restock(db, order)
+    restock(db, order, actor_id=actor_id)
     refunded = refund(order)
     if refunded is not None:
         transition(order, "refunded", note=note, actor_id=actor_id)
