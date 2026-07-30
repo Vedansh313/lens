@@ -34,7 +34,10 @@ function buildUrl(path, params) {
   return url;
 }
 
-async function getJSON(path, params) {
+// Exported for @/data/admin, which is a separate module so the storefront
+// client does not grow an admin surface it never calls. Both share the auth
+// header + token-refresh behaviour above; there must not be a second copy of it.
+export async function getJSON(path, params) {
   const res = await authedFetch(buildUrl(path, params), {
     headers: { "ngrok-skip-browser-warning": "true", ...authHeaders() },
   });
@@ -42,7 +45,7 @@ async function getJSON(path, params) {
   return res.json();
 }
 
-async function sendJSON(method, path, body) {
+export async function sendJSON(method, path, body) {
   const res = await authedFetch(`${API_URL}${path}`, {
     method,
     headers: {

@@ -1,0 +1,513 @@
+/* Admin panel styles (Phase 4, step 10).
+   Its own file rather than more of lens.css: the admin area is a distinct
+   surface and lens.css is already ~940 lines of storefront.
+
+   Everything here is built on the same custom properties the storefront uses
+   (--surface, --border, --accent, --muted), so the panel inherits light/dark
+   themes for free and reads as the same product rather than a bolted-on tool.
+   The only new colour is for danger affordances and stock states, where the
+   meaning has to survive being glanced at. */
+
+.admin-badge {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.admin-entry {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.admin-page {
+  margin-top: 1rem;
+}
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.4rem;
+}
+.admin-tab {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 0.7rem 1.1rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.admin-tab:hover {
+  color: var(--text);
+}
+.admin-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.admin-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+.admin-section-head h2 {
+  margin: 0;
+  font-family: "Times New Roman", serif;
+  font-size: 1.8rem;
+}
+
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+.admin-stats.secondary {
+  margin-bottom: 1.6rem;
+}
+.admin-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+}
+.admin-stat-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.admin-stat-value {
+  margin: 0.35rem 0 0;
+  font-size: 1.7rem;
+  font-weight: 700;
+}
+.admin-stat-delta {
+  margin: 0.3rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.admin-stat-delta.up {
+  color: #2e7d32;
+}
+.admin-stat-delta.down {
+  color: #c0392b;
+}
+.admin-stat-hint {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+}
+
+.admin-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.2rem 1.3rem;
+  margin-bottom: 1.2rem;
+}
+.admin-card h3 {
+  margin: 0 0 0.3rem;
+  font-size: 1.1rem;
+}
+.admin-card h5 {
+  margin: 1.2rem 0 0.5rem;
+  font-size: 0.95rem;
+}
+.admin-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+}
+
+.admin-chart {
+  margin-top: 0.9rem;
+}
+.admin-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 150px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+}
+.admin-bar-slot {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  min-width: 3px;
+}
+.admin-bar {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}
+/* A quiet day is drawn as a hairline in the border colour, not as a short
+   accent bar: an empty day must not look like a small sale. */
+.admin-bar.zero {
+  background: var(--border);
+  height: 2px !important;
+}
+.admin-chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.admin-chart-peak {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+}
+
+.admin-bars-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.admin-bars-list li {
+  display: grid;
+  grid-template-columns: 92px 1fr 44px;
+  align-items: center;
+  gap: 0.6rem;
+}
+.admin-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.admin-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.admin-bars-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+.admin-dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 1rem;
+  margin: 0.8rem 0;
+}
+.admin-dl dt {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.admin-dl dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.7rem;
+  font-size: 0.92rem;
+}
+.admin-table.wide {
+  font-size: 0.88rem;
+}
+.admin-table th {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.admin-table td {
+  padding: 0.65rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+.admin-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.admin-table .num.up {
+  color: #2e7d32;
+  font-weight: 600;
+}
+.admin-table .num.down {
+  color: #c0392b;
+  font-weight: 600;
+}
+.admin-table .strong {
+  font-weight: 700;
+}
+.admin-table .mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85em;
+}
+.admin-table tr.inactive-row {
+  opacity: 0.55;
+}
+
+.admin-sub {
+  display: block;
+  font-size: 0.8rem;
+}
+.admin-flag {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.admin-flag.admin {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.stock-state {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.stock-state.out {
+  background: #c0392b;
+  color: #fff;
+}
+.stock-state.low {
+  background: #b26a00;
+  color: #fff;
+}
+.stock-state.ok {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.admin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.admin-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.admin-search {
+  display: flex;
+  gap: 0.4rem;
+}
+.admin-search input {
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  min-width: 220px;
+}
+
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.8rem;
+}
+.admin-field > span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.admin-field input,
+.admin-field select {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.admin-field .req {
+  color: var(--accent);
+  font-style: normal;
+}
+/* Sits directly under a .admin-range toggle and explains it. Positive top
+   margin: a negative one pulls the text into the buttons it describes. */
+.admin-hint {
+  margin: 0.5rem 0 0.9rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0 1rem;
+}
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.chip.danger {
+  border-color: #c0392b;
+  color: #c0392b;
+}
+.chip.danger:hover {
+  background: #c0392b;
+  color: #fff;
+}
+.login-submit.narrow {
+  width: auto;
+  padding: 0.6rem 1.2rem;
+}
+
+.linkish {
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  padding: 0;
+}
+.inline-edit {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+.inline-edit input {
+  width: 90px;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* Docked panel rather than a modal overlay: the admin needs to keep reading
+   the table behind it while deciding, and a native dialog would block the page
+   and leave nowhere to type the reason that lands in the audit trail. */
+.admin-confirm {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  width: min(420px, calc(100vw - 3rem));
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+  padding: 1.2rem 1.3rem;
+  z-index: 40;
+}
+.admin-confirm.wide {
+  width: min(640px, calc(100vw - 3rem));
+}
+.admin-confirm h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+.admin-confirm h5 {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.admin-error {
+  color: #c0392b;
+  font-size: 0.88rem;
+  margin: 0.5rem 0;
+}
+.admin-warn {
+  background: rgba(224, 122, 60, 0.12);
+  border-left: 3px solid var(--accent);
+  padding: 0.6rem 0.8rem;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.86rem;
+  margin: 0.6rem 0;
+}
+.admin-notice {
+  background: var(--surface-2);
+  border-left: 3px solid #2e7d32;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.88rem;
+  margin-bottom: 1rem;
+}
+.admin-empty {
+  color: var(--muted);
+  padding: 2rem 0;
+  text-align: center;
+}
+.admin-footnote {
+  margin-top: 1rem;
+  font-size: 0.82rem;
+}
+.admin-history {
+  margin-top: 1.2rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+}
+
+@media (max-width: 1000px) {
+  .admin-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .admin-two-col {
+    grid-template-columns: 1fr;
+  }
+  .admin-form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .admin-stats {
+    grid-template-columns: 1fr;
+  }
+  .admin-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-table.wide {
+    font-size: 0.8rem;
+  }
+  .admin-confirm {
+    right: 0.5rem;
+    left: 0.5rem;
+    bottom: 0.5rem;
+    width: auto;
+  }
+}

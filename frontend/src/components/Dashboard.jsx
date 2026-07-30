@@ -42,6 +42,7 @@ export default function Dashboard({
   onAddToCart,
   onOpenCart,
   onOpenOrders,
+  onOpenAdmin,
 }) {
   const [query, setQuery] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
@@ -277,6 +278,13 @@ export default function Dashboard({
         </nav>
         <div className="nav-actions">
           <span className="user-greeting">Hi, {user.name}</span>
+          {/* Shown to admins only. The server gates the routes themselves, so
+              this is about not offering a door that would not open. */}
+          {user.is_admin && (
+            <button type="button" className="cart-btn admin-entry" onClick={onOpenAdmin}>
+              Admin
+            </button>
+          )}
           <button type="button" className="cart-btn" onClick={onOpenOrders}>
             Orders
           </button>

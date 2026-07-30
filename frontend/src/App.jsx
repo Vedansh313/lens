@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import AdminPage from "@/components/AdminPage";
 import CartPage from "@/components/CartPage";
 import CheckoutPage from "@/components/CheckoutPage";
 import ConfirmationPage from "@/components/ConfirmationPage";
@@ -115,6 +116,20 @@ export default function App() {
     );
   }
 
+  // session.is_admin decides whether the admin area renders at all, but it is
+  // only a convenience: every /admin route 403s for a non-admin regardless, so
+  // a tampered localStorage session buys an empty screen, not access.
+  if (view === "admin" && session.is_admin) {
+    return (
+      <AdminPage
+        user={session}
+        onBack={() => setView("catalog")}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+    );
+  }
+
   if (view === "confirmation") {
     return (
       <ConfirmationPage
@@ -139,6 +154,7 @@ export default function App() {
       onAddToCart={cart.add}
       onOpenCart={() => setView("cart")}
       onOpenOrders={() => setView("orders")}
+      onOpenAdmin={() => setView("admin")}
     />
   );
 }
