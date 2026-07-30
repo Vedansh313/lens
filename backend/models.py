@@ -77,6 +77,30 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # Account disabled by an admin (Phase 4, step 8). Not a delete: orders,
+    # payments and history must survive, and the email must stay taken so the
+    # account cannot be re-registered by someone else.
+    #
+    # Enforced in auth.get_current_user and at login/refresh, so an access token
+    # minted before the account was disabled stops working on its next request
+    # rather than lasting until it expires.
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    # Provenance for the flag above. Disabling an account is a security-relevant
+    # action, so "who did this and why" has to survive it — the same principle as
+    # OrderStatusHistory.changed_by_user_id and StockAdjustment.reason.
+    #
+    # Three columns on the row rather than a user_status_history table: the
+    # question an admin asks is "why is this account off?", which is about the
+    # CURRENT state. Cleared on re-enable, so a stale reason can never be read
+    # as describing a live account. If a full disable/enable timeline is ever
+    # needed, that is a history table and this becomes its latest row.
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deactivated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    deactivation_reason: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

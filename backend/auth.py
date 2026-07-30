@@ -44,6 +44,11 @@ _UNAUTHORIZED = {
     "headers": {"WWW-Authenticate": "Bearer"},
 }
 
+# Shown wherever a disabled account is turned away (Phase 4, step 8). 401 and
+# not 403, so the frontend's existing "session ended" handling takes over and
+# clears the tokens instead of leaving a dead session on screen.
+_DISABLED_DETAIL = "This account has been disabled. Contact support."
+
 
 # ---------------------------------------------------------------------------
 # Dependencies
@@ -77,6 +82,11 @@ def get_current_user(
     user = db.get(User, int(payload["sub"]))
     if user is None:
         raise HTTPException(detail="User no longer exists", **_UNAUTHORIZED)
+    # Checked on every request, not just at login: tokens are stateless and
+    # cannot be revoked, so this is what makes disabling an account take effect
+    # immediately rather than whenever the access token happens to expire.
+    if not user.is_active:
+        raise HTTPException(detail=_DISABLED_DETAIL, **_UNAUTHORIZED)
     return user
 
 
@@ -174,6 +184,10 @@ def login(body: LoginIn, db: Session = Depends(get_db)) -> TokenOut:
     # same 401 so the response doesn't reveal which was wrong.
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(detail="Incorrect email or password.", **_UNAUTHORIZED)
+    # Only after the password checks out: saying "disabled" to anyone who types
+    # the address would confirm the account exists to someone who cannot log in.
+    if not user.is_active:
+        raise HTTPException(detail=_DISABLED_DETAIL, **_UNAUTHORIZED)
     return TokenOut(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),
@@ -188,8 +202,15 @@ def refresh(body: RefreshIn, db: Session = Depends(get_db)) -> AccessTokenOut:
         raise HTTPException(detail=str(exc), **_UNAUTHORIZED) from exc
 
     # The account must still exist to mint a fresh access token for it.
-    if db.get(User, int(payload["sub"])) is None:
+    user = db.get(User, int(payload["sub"]))
+    if user is None:
         raise HTTPException(detail="User no longer exists", **_UNAUTHORIZED)
+    # A refresh token outlives an access token, so without this a disabled
+    # account could keep minting working access tokens until the refresh
+    # expires. bcd6880 made the frontend end the session on a rejected refresh,
+    # so this logs them out rather than looping.
+    if not user.is_active:
+        raise HTTPException(detail=_DISABLED_DETAIL, **_UNAUTHORIZED)
     return AccessTokenOut(access_token=create_access_token(payload["sub"]))
 
 
