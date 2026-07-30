@@ -358,6 +358,16 @@ ORDER_STATUSES = (
     "refunded",
 )
 
+# The subset of ORDER_STATUSES that counts as money the business kept: paid for
+# and not unwound. Excludes 'pending' (never charged) and cancelled/returned/
+# refunded (charged then given back).
+#
+# Defined here, next to the statuses themselves, because more than one module
+# reports revenue — users.py for lifetime value, analytics.py for every figure
+# it produces. Two copies of this tuple would eventually disagree, and an admin
+# panel showing two different revenue numbers is worse than one wrong one.
+REVENUE_STATUSES = ("paid", "shipped", "delivered")
+
 
 class Order(Base):
     """An order created from a user's cart at checkout (Phase 3).

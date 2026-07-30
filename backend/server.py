@@ -53,6 +53,7 @@ from catalog import router as catalog_router
 from cart import router as cart_router
 from checkout import router as checkout_router
 from engagement import router as engagement_router
+from analytics import router as analytics_router
 from inventory import router as inventory_router
 from users import router as users_router
 from orders import router as orders_router
@@ -208,6 +209,8 @@ app.include_router(inventory_router)
 # User management (/admin/users/...). Gated on is_admin. Read + enable/disable
 # only — granting admin stays in promote_admin.py, off the network.
 app.include_router(users_router)
+# Analytics (/admin/analytics/...). Gated on is_admin. Read-only aggregation.
+app.include_router(analytics_router)
 # Hybrid search (/api/v1/hybrid-search): reuses the re-ranker + embed helpers
 # above (injected, not re-imported) and fuses in catalog filters + real pricing.
 app.include_router(

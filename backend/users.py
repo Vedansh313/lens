@@ -26,18 +26,12 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from auth import get_db, require_admin
-from models import Address, CartItem, Order, User, WishlistItem
+from models import REVENUE_STATUSES, Address, CartItem, Order, User, WishlistItem
 
 router = APIRouter(
     prefix="/admin/users", tags=["admin", "users"],
     dependencies=[Depends(require_admin)],
 )
-
-# Order statuses that represent money the business actually kept. Excludes
-# pending (never paid) and the three unwound states, so "total spent" matches
-# what a refund report would say rather than counting cancelled orders as
-# revenue.
-REVENUE_STATUSES = ("paid", "shipped", "delivered")
 
 
 def _revenue_case():
