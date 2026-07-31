@@ -12,7 +12,11 @@ password requires shell access to the machine running the database.
 THIS IS THE ONLY WAY TO CHANGE A PASSWORD IN PHASE 5. Self-service reset needs a
 transactional email provider, which was deferred to Phase 6, so a user who
 forgets their password cannot recover the account without an operator running
-this. That is a known gap, not an oversight — see PHASE5.md.
+this. That is a known gap, not an oversight - see PHASE5.md.
+
+Output is deliberately ASCII-only: this runs on a server console, and Windows
+terminals default to cp1252, where a non-ASCII character renders as a replacement
+glyph in the middle of a security instruction.
 
 --generate is the recommended form: it prints a password from secrets.choice and
 never takes one from the shell. Passwords typed as arguments end up in shell
@@ -95,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
             # Printed once and never stored anywhere. There is no recovery flow
             # in Phase 5, so losing this means running this tool again.
             print(f"\n    {password}\n")
-            print("Store it in a password manager now — it is not saved anywhere,")
+            print("Store it in a password manager now - it is not saved anywhere,")
             print("and there is no self-service reset until Phase 6.")
 
         # Existing tokens keep working: JWTs are stateless and carry only the
