@@ -837,37 +837,6 @@ body[data-theme="dark"] .field-error {
 
 .login-switch-btn:hover { color: var(--text); }
 
-.login-demo {
-  margin-top: 1.25rem;
-  padding-top: 1.15rem;
-  border-top: 1px solid var(--border);
-  display: grid;
-  gap: 0.4rem;
-  color: var(--muted);
-  font-size: 0.88rem;
-}
-
-.login-demo-creds {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-}
-
-.login-demo code {
-  font-size: 0.82rem;
-  color: var(--text);
-  background: var(--surface-2);
-  padding: 0.2rem 0.45rem;
-  border-radius: 0.35rem;
-}
-
-.login-demo .chip {
-  justify-self: start;
-  margin-top: 0.35rem;
-}
-
 @media (max-width: 1024px) {
   .catalog-layout { grid-template-columns: 1fr; }
   .filters { position: static; }

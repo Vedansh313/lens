@@ -77,14 +77,6 @@ export default function LoginPage({ onLogin, onRegister, theme, onToggleTheme })
     }
   };
 
-  const fillDemo = () => {
-    setMode("signin");
-    setEmail("demo@lens.app");
-    setPassword("demo1234");
-    setError("");
-    setFieldErrors({});
-  };
-
   // A field-level message replaces the form-level banner rather than duplicating
   // it — showing "Enter a valid email address." twice reads as two problems.
   const showBanner = error && Object.keys(fieldErrors).length === 0;
@@ -206,17 +198,6 @@ export default function LoginPage({ onLogin, onRegister, theme, onToggleTheme })
                 </button>
               </p>
 
-              <div className="login-demo">
-                <p>Demo account</p>
-                <p className="login-demo-creds">
-                  <code>demo@lens.app</code>
-                  <span aria-hidden="true"> · </span>
-                  <code>demo1234</code>
-                </p>
-                <button type="button" className="chip button-chip" onClick={fillDemo}>
-                  Use demo credentials
-                </button>
-              </div>
             </form>
           </section>
         </div>
