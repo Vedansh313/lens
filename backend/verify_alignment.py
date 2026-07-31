@@ -20,6 +20,14 @@ positions 4233 and 2615 are both "Gini and Jony Girls Printed Pink Dress",
 ids 34063 and 34062). FAISS breaks such ties by returning the lowest position,
 so requiring a strict self-match produces false failures. Duplicate-vector ties
 are reported separately and are not errors.
+
+NOTE on row counts: since Phase 4 step 6 the DB may hold MORE rows than the
+FAISS index. Admin-created products take faiss_index = max + 1 and have no CLIP
+vector, so they extend the sequence past the end of the index and are
+text-searchable only. The DB is therefore expected to be longer than the index
+by exactly the number of such rows; it must never differ by anything else,
+because a row added or lost INSIDE the aligned region shifts every position
+after it and silently corrupts lookups without failing anything loudly.
 """
 from __future__ import annotations
 
@@ -61,9 +69,37 @@ def main() -> None:
 
     with SessionLocal() as session:
         n_db = session.scalar(select(func.count()).select_from(Product))
-    print(f"DB    : {n_db:,} rows")
-    if n_db != len(df):
-        sys.exit(f"FATAL: DB has {n_db:,} rows, expected {len(df):,}")
+        # Rows past the end of the index — admin-created products, which carry a
+        # faiss_index but no vector. Fetched rather than counted so the run can
+        # name them: an unexpected one here is usually test residue.
+        beyond = session.execute(
+            select(Product.id, Product.faiss_index, Product.product_display_name)
+            .where(Product.faiss_index >= len(df))
+            .order_by(Product.faiss_index)
+        ).all()
+    print(f"DB    : {n_db:,} rows ({len(beyond):,} beyond the FAISS index)")
+
+    if n_db - len(beyond) != len(df):
+        sys.exit(
+            f"FATAL: {n_db:,} DB rows minus {len(beyond):,} beyond the index "
+            f"!= {len(df):,} JSON rows"
+        )
+
+    if beyond:
+        # server.py requires faiss_index to be a contiguous 0..n-1 sequence at
+        # startup, so a gap out here does not degrade search — it stops the
+        # backend booting at all. Worth catching in the checker rather than in
+        # the next cold start.
+        want = list(range(len(df), len(df) + len(beyond)))
+        got = [fi for _, fi, _ in beyond]
+        if got != want:
+            sys.exit(
+                f"FATAL: rows beyond the index are not contiguous; expected "
+                f"faiss_index {want[0]}..{want[-1]}, got {got}"
+            )
+        print("        no CLIP vector, text-searchable only:")
+        for pid, fi, name in beyond:
+            print(f"        faiss_index {fi} -> id={pid} {name}")
 
     random.seed(SEED)
     n = min(args.samples, index.ntotal)
