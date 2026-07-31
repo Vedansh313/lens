@@ -122,7 +122,70 @@ Interactive API docs: <http://localhost:8000/docs>
 
 Registration is open — use the **Create an account** form on the sign-in page.
 A new account is an ordinary customer. Admin rights are granted separately, from
-a shell; see "Admin bootstrap" below.
+a shell; see below.
+
+## Admin bootstrap
+
+**A freshly migrated database has no admin at all.** Nothing in this repository
+carries admin status: `is_admin` is a column in PostgreSQL, so cloning the code
+and running the migrations gives you a store with zero administrators, and no
+amount of deploying changes that. Every environment needs this done once,
+by hand.
+
+There is deliberately no API endpoint that grants admin rights. A self-serve
+route to privilege escalation is the one thing that must not be reachable over
+the network, however well guarded, so promotion requires shell access to the
+machine running the database. The admin dashboard does not offer a
+promote/demote control for the same reason — its absence is a decision, not an
+oversight.
+
+Run from `backend/`, with the virtualenv active:
+
+```bash
+# 1. Register normally first — through the app's own sign-up form, so the
+#    password is chosen by whoever will own the account and never typed by
+#    anyone else.
+
+# 2. Grant admin rights
+python promote_admin.py you@example.com
+
+# 3. Confirm
+python promote_admin.py --list
+```
+
+Then sign in: an **Admin** button appears in the header, and `/admin/*` routes
+start returning 200 instead of 403.
+
+### Handing over, or rotating an admin
+
+Order matters. `promote_admin.py` refuses to revoke the last remaining admin —
+that guard is what stops you locking everyone out — so always promote the
+replacement first and *prove it works* before revoking anyone:
+
+```bash
+python promote_admin.py new-admin@example.com   # 1. promote
+#                                                 2. sign in as them, open the
+#                                                    dashboard, confirm it loads
+python promote_admin.py old-admin@example.com --revoke   # 3. only then revoke
+```
+
+### Passwords
+
+`set_password.py` is the only way to change a password in Phase 5 — self-service
+reset needs an email provider, deferred to Phase 6.
+
+```bash
+python set_password.py you@example.com --generate   # prints a strong password once
+python set_password.py you@example.com --prompt     # type one, not echoed
+```
+
+There is no `--password` flag: an argument would land in shell history and in
+`ps` output for every user on the machine.
+
+Note that changing a password does **not** sign out existing sessions. JWTs are
+stateless and carry only a user id, so nothing about an issued token depends on
+the password. Rotating `JWT_SECRET` is what ends every session everywhere — see
+`backend/.env.example`.
 
 ## Frontend scripts
 
