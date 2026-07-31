@@ -21,6 +21,111 @@ maps each database row to its position in the FAISS index, and that alignment is
 an invariant the code asserts at startup. `backend/verify_alignment.py` proves it
 independently.
 
+## How search works
+
+Two stages. The first is semantic and approximate; the second is symbolic and
+corrective. Neither is sufficient alone.
+
+**Stage 1 — retrieval.** The query becomes a 512-dimension CLIP embedding and
+FAISS returns the `retrieve_n` nearest catalogue vectors (default 50) by inner
+product on L2-normalised vectors, i.e. cosine similarity. The query embedding
+comes from one of three places:
+
+| Query | Embedding |
+| --- | --- |
+| Text | `model.encode_text` |
+| Image | `model.encode_image` |
+| Both | `alpha * image + (1 - alpha) * text`, renormalised (default `alpha=0.7`) |
+
+Because all three produce a vector in the same space, image, text and combined
+search share one retrieval path rather than being three features.
+
+**Stage 2 — metadata re-ranking.** CLIP is good at "looks like this" and
+unreliable at "is definitely red". So the query is also parsed against
+vocabulary mined from the dataset itself — every distinct `articleType` and
+`baseColour`, plus a small synonym table (`sneakers -> Casual Shoes`,
+`trainers -> Sports Shoes`) — and candidates matching the parsed intent get an
+additive boost before the final sort:
+
+| Match | Boost |
+| --- | --- |
+| Article type | +0.15 |
+| Colour | +0.10 |
+| Gender | +0.05 |
+
+The boosts are additive on a cosine score, and deliberately small: they reorder
+within the retrieved set but cannot drag in something CLIP considered
+irrelevant. Recall stays the retriever's job.
+
+Implementation: `ai/search_system.py` (`build_search`), wired up in
+`backend/server.py`. The catalogue-filtered variant used by the storefront is
+`backend/hybrid.py`.
+
+## Benchmarks
+
+Two evaluations were run, on different query sets. They are not comparable to
+each other, so they are reported separately.
+
+**40 queries — effect of re-ranking** (`ai/results/final_results.json`)
+
+| Stage | P@5 | P@10 | NDCG@5 | NDCG@10 |
+| --- | --- | --- | --- | --- |
+| Fine-tuned CLIP, retrieval only | 0.705 | 0.703 | 0.818 | 0.836 |
+| **Fine-tuned + metadata re-rank** | **0.900** | 0.877 | 0.928 | 0.937 |
+
+**8 queries — effect of fine-tuning** (`ai/results/model_comparison.json`)
+
+| Model | P@5 | P@10 | NDCG@5 | NDCG@10 |
+| --- | --- | --- | --- | --- |
+| Baseline CLIP ViT-B/32 | 0.775 | 0.837 | 0.943 | 0.925 |
+| Fine-tuned | 0.850 | 0.838 | 0.960 | 0.948 |
+
+Fine-tuning: triplet margin loss over 3,000 metadata-mined triplets, fp32,
+lr=1e-6, 2 epochs.
+
+**The headline number is 0.900 P@5, and the honest reading is that re-ranking
+earned more of it than fine-tuning did** (+0.195 P@5 from re-ranking on the
+40-query set, against +0.075 from fine-tuning on the 8-query set). The cheap
+symbolic layer outperformed the expensive learned one on this dataset.
+
+Caveats, because they matter for how much weight these numbers carry:
+
+- Relevance is **approximated from product metadata**, not human judgement. A
+  result counts as relevant if its attributes match the parsed query, which is
+  the same signal Stage 2 boosts on — so the re-ranking figure is measured on a
+  criterion related to what it optimises.
+- 40 and 8 queries are small. Treat these as directional.
+- Some apparent failures are taxonomy artefacts rather than retrieval errors —
+  a query for women's sandals cannot return five good hits when the catalogue
+  holds four.
+- Boosting improved mis-ranked queries while leaving genuinely sparse ones
+  unchanged, which is the pattern you would want if the gain is real rather
+  than metric-gaming.
+
+## Tech stack
+
+| Layer | Choice |
+| --- | --- |
+| Model | OpenAI CLIP ViT-B/32, fine-tuned (`clip-anytorch`, PyTorch) |
+| Vector search | FAISS (`IndexFlatIP`, 44,419 x 512, exact) |
+| API | FastAPI + Uvicorn, Pydantic schemas |
+| Database | PostgreSQL 14+, SQLAlchemy 2.0, Alembic, psycopg 3 |
+| Full-text | PostgreSQL `tsvector` + `pg_trgm` fuzzy matching |
+| Auth | JWT (PyJWT) access + refresh tokens, bcrypt hashing |
+| Frontend | React 19, Vite 6, hand-written CSS |
+| Payments | Simulated UPI / card / wallet gateway |
+
+`IndexFlatIP` is exhaustive rather than approximate: at 44k vectors an exact
+scan is fast enough that an ANN index would trade recall for latency nobody
+would notice.
+
+Notable non-choices. The frontend's only runtime dependencies are `react` and
+`react-dom` — no router, no charting library, no CSS framework (see
+`AGENTS.md`), so tab state is `useState` and the admin revenue chart is a `div`
+per bucket. The backend's rate limiter (`backend/ratelimit.py`) is stdlib plus
+FastAPI, with no Redis: the deploy target is a single process, and that
+constraint is documented in the module rather than discovered later.
+
 ## Prerequisites
 
 - Python 3.12
