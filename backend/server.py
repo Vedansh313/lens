@@ -73,6 +73,20 @@ IMAGES_DIR = Path(os.getenv("IMAGES_DIR", BASE_DIR / "images"))
 # Base URL used to build image_url values returned to the frontend.
 IMAGE_BASE_URL = os.getenv("IMAGE_BASE_URL", "http://localhost:8000")
 
+LENS_ENV = os.getenv("LENS_ENV", "development").strip().lower()
+IS_PRODUCTION = LENS_ENV == "production"
+
+# A localhost IMAGE_BASE_URL in production is not a degraded mode, it is a
+# broken site: the value is embedded in every JSON response, so the browser
+# resolves it against the USER's machine and every product image 404s. The
+# server itself would look perfectly healthy, so this fails at boot instead —
+# the one moment someone is watching.
+if IS_PRODUCTION and ("localhost" in IMAGE_BASE_URL or "127.0.0.1" in IMAGE_BASE_URL):
+    raise RuntimeError(
+        f"LENS_ENV=production but IMAGE_BASE_URL is {IMAGE_BASE_URL!r}. "
+        "Set it to the public origin (or CDN) that browsers should load images from."
+    )
+
 # Browser origins allowed to call this API, comma-separated. The default covers
 # the Vite dev server on both spellings of localhost, so development needs no
 # .env entry; a deployment must set this to its real frontend origin.

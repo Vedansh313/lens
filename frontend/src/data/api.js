@@ -2,9 +2,8 @@
 // All catalog/search/cart/engagement calls go through here so auth headers and
 // the base URL live in one place.
 
+import { API_URL } from "@/config/env";
 import { refreshAccessToken } from "@/data/auth";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 function authHeaders() {
   const token = localStorage.getItem("lens-access-token");

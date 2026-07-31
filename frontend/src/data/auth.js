@@ -2,7 +2,8 @@
 // Replaces the former hardcoded user list. Tokens live in localStorage; the
 // backend issues a short-lived access token + a longer refresh token.
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+import { API_URL } from "@/config/env";
+
 const ACCESS_KEY = "lens-access-token";
 const REFRESH_KEY = "lens-refresh-token";
 
