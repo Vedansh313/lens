@@ -6,7 +6,9 @@ export default function HeroSection({
   suggestions = [],
   onPickSuggestion,
   onImageUpload,
-  onCameraUpload,
+  selectedImage,
+  selectedImagePreview,
+  onClearImage,
   onRunSearch,
   onChipClick,
 }) {
@@ -22,18 +24,44 @@ export default function HeroSection({
       </div>
 
       <div className="hero-grid">
-        <label className="upload-dropzone">
-          <input type="file" accept="image/*" onChange={onImageUpload} />
-          <div className="upload-icon">?</div>
-          <h3>Drop a photo to search</h3>
-          <p>PNG, JPG up to 10MB • or pick from below</p>
-          <div className="upload-actions">
-            <span className="chip button-chip">Upload image</span>
-            <button type="button" className="chip button-chip" onClick={onCameraUpload}>
-              Use camera
-            </button>
-          </div>
-        </label>
+        {/* A div, not a label. Any click inside a label activates the file
+            input it wraps, so a "Clear photo" button nested in one fights the
+            picker for the same click. Only the explicit choose-a-file targets
+            below are labels; the clear button is a sibling and cannot open it. */}
+        <div className={`upload-dropzone${selectedImage ? " has-image" : ""}`}>
+          {selectedImage ? (
+            <>
+              {/* Confirms what is actually being searched. Without it, picking a
+                  photo changed nothing on screen and looked like a dead click. */}
+              {selectedImagePreview && (
+                <img className="upload-preview" src={selectedImagePreview} alt="" />
+              )}
+              <h3>Searching this photo</h3>
+              <p className="upload-filename" title={selectedImage}>
+                {selectedImage}
+              </p>
+              <div className="upload-actions">
+                <label className="chip button-chip upload-trigger">
+                  <input type="file" accept="image/*" onChange={onImageUpload} />
+                  Choose another
+                </label>
+                <button type="button" className="chip button-chip" onClick={onClearImage}>
+                  Clear photo
+                </button>
+              </div>
+            </>
+          ) : (
+            <label className="upload-empty">
+              <input type="file" accept="image/*" onChange={onImageUpload} />
+              <div className="upload-icon">?</div>
+              <h3>Drop a photo to search</h3>
+              <p>PNG, JPG up to 10MB • or pick from below</p>
+              <div className="upload-actions">
+                <span className="chip button-chip">Upload image</span>
+              </div>
+            </label>
+          )}
+        </div>
 
         <div className="ai-search-panel">
           <span className="search-tag">AI visual search</span>

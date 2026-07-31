@@ -47,6 +47,9 @@ export default function Dashboard({
   const [query, setQuery] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
+  // Object URL for the thumbnail. Held in state rather than derived on render
+  // so there is exactly one URL per file to revoke — see the cleanup effect.
+  const [selectedImagePreview, setSelectedImagePreview] = useState(null);
 
   // "Committed" search inputs — distinct from the live text box so typing does
   // not refetch until the user actually searches.
@@ -206,6 +209,7 @@ export default function Dashboard({
     setQuery("");
     setSelectedImage(null);
     setSelectedImageFile(null);
+    setSelectedImagePreview(null);
     setSuggestions([]);
   };
 
@@ -231,13 +235,44 @@ export default function Dashboard({
     handleRunSearch(suggestion);
   };
 
+  // Picking an image runs the search immediately. Staging it and waiting for a
+  // Search click looked identical to nothing happening — the dropzone said
+  // "Drop a photo to search" both before and after, so there was no way to tell
+  // the file had been accepted.
   const handleImageUpload = (event) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setSelectedImage(file.name);
-      setSelectedImageFile(file);
-    }
+    // Reset the input's value so choosing the SAME file again still fires
+    // change; browsers suppress it otherwise, which would make re-picking after
+    // a clear silently do nothing — the bug this replaces, in miniature.
+    event.target.value = "";
+    if (!file) return;
+
+    setSelectedImage(file.name);
+    setSelectedImageFile(file);
+    setSelectedImagePreview(URL.createObjectURL(file));
+
+    // Commit both halves: any text already typed combines with the image,
+    // which is what the panel offers ("Describe it, or just show us").
+    setActiveImageFile(file);
+    setActiveQuery(query.trim());
   };
+
+  const handleClearImage = () => {
+    setSelectedImage(null);
+    setSelectedImageFile(null);
+    setSelectedImagePreview(null);
+    setActiveImageFile(null);
+    // activeQuery is left alone: clearing the photo should fall back to the
+    // text search, or to browsing if there was no text.
+  };
+
+  // Revokes the previous object URL whenever it is replaced, and the last one
+  // on unmount. Without this every image picked leaks its blob for the life of
+  // the page.
+  useEffect(() => {
+    if (!selectedImagePreview) return undefined;
+    return () => URL.revokeObjectURL(selectedImagePreview);
+  }, [selectedImagePreview]);
 
   // ---- Product interactions ---------------------------------------------
   const handleOpenProduct = async (product) => {
@@ -304,7 +339,9 @@ export default function Dashboard({
         suggestions={suggestions}
         onPickSuggestion={handlePickSuggestion}
         onImageUpload={handleImageUpload}
-        onCameraUpload={() => setSelectedImage("camera-capture.jpg")}
+        selectedImage={selectedImage}
+        selectedImagePreview={selectedImagePreview}
+        onClearImage={handleClearImage}
         onRunSearch={() => handleRunSearch()}
         onChipClick={(chip) => handleRunSearch(chip)}
       />

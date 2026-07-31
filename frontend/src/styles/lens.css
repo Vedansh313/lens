@@ -73,6 +73,38 @@ nav a:hover { color: var(--text); }
   cursor: pointer;
 }
 .upload-dropzone input { display: none; }
+/* Fills the dropzone so the whole empty state stays one big click target,
+   which is what it looked like when the dropzone itself was the label. */
+.upload-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  flex: 1;
+  cursor: pointer;
+}
+.upload-trigger { cursor: pointer; }
+/* Solid border once a photo is staged: dashed reads as "empty, drop here",
+   which is exactly the wrong signal when something has been accepted. Cursor
+   reverts to default too — with a photo shown, only the two buttons are live. */
+.upload-dropzone.has-image { border-style: solid; border-color: var(--accent); cursor: default; }
+.upload-preview {
+  max-width: 190px;
+  max-height: 190px;
+  object-fit: contain;
+  border-radius: 0.9rem;
+  margin-bottom: 1rem;
+  background: var(--surface-2);
+}
+.upload-filename {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
 .upload-icon {
   width: 3.3rem; height: 3.3rem; border-radius: 50%; display: grid; place-items: center;
   background: var(--surface-2); margin-bottom: 1rem;
