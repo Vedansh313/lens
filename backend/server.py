@@ -73,6 +73,19 @@ IMAGES_DIR = Path(os.getenv("IMAGES_DIR", BASE_DIR / "images"))
 # Base URL used to build image_url values returned to the frontend.
 IMAGE_BASE_URL = os.getenv("IMAGE_BASE_URL", "http://localhost:8000")
 
+# Browser origins allowed to call this API, comma-separated. The default covers
+# the Vite dev server on both spellings of localhost, so development needs no
+# .env entry; a deployment must set this to its real frontend origin.
+#
+# This is the security boundary, which is why it is a list and not "*": any
+# origin here can drive the API with a token the browser already holds. Methods
+# and headers stay "*" because, once the origin is trusted, narrowing them adds
+# maintenance without adding protection.
+_DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+CORS_ALLOW_ORIGINS = [
+    o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", _DEFAULT_ORIGINS).split(",") if o.strip()
+]
+
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -177,12 +190,17 @@ def _with_image_url(results: list) -> list:
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Lens Visual Search API")
 
+# allow_credentials stays off: auth travels in an Authorization header, not a
+# cookie, so the browser never needs to attach credentials cross-origin. Turning
+# it on would also make a "*" origin illegal per the CORS spec — a good reminder
+# that the two settings are related.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ALLOW_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+print(f"[lens] CORS allowed origins: {', '.join(CORS_ALLOW_ORIGINS) or '(none)'}")
 
 IMAGES_DIR.mkdir(exist_ok=True)
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
