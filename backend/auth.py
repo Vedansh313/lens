@@ -22,6 +22,12 @@ from sqlalchemy.orm import Session
 
 from db import SessionLocal
 from models import User
+from ratelimit import (
+    check_login_email,
+    clear_login_email,
+    limit_login_ip,
+    limit_register_ip,
+)
 from security import (
     ACCESS_TOKEN,
     REFRESH_TOKEN,
@@ -156,7 +162,12 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=UserOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_register_ip)],
+)
 def register(body: RegisterIn, db: Session = Depends(get_db)) -> User:
     email = _normalize_email(body.email)
     user = User(email=email, password_hash=hash_password(body.password), name=body.name.strip())
@@ -175,9 +186,15 @@ def register(body: RegisterIn, db: Session = Depends(get_db)) -> User:
     return user
 
 
-@router.post("/login", response_model=TokenOut)
+@router.post("/login", response_model=TokenOut, dependencies=[Depends(limit_login_ip)])
 def login(body: LoginIn, db: Session = Depends(get_db)) -> TokenOut:
     email = _normalize_email(body.email)
+    # Second limiter, keyed by the account rather than the caller: a botnet
+    # guessing one password from many addresses stays under every per-IP limit.
+    # Checked before the password is verified, so being over the limit costs an
+    # attacker a bcrypt comparison they never get.
+    check_login_email(email)
+
     user = db.scalar(select(User).where(User.email == email))
     # Verify even when the user is missing would be ideal for timing, but a
     # dummy hash adds complexity; bad email and bad password both return the
@@ -188,6 +205,9 @@ def login(body: LoginIn, db: Session = Depends(get_db)) -> TokenOut:
     # the address would confirm the account exists to someone who cannot log in.
     if not user.is_active:
         raise HTTPException(detail=_DISABLED_DETAIL, **_UNAUTHORIZED)
+    # Correct credentials: forget the failures so an honest user who mistyped a
+    # few times does not carry a lockout around for the rest of the window.
+    clear_login_email(email)
     return TokenOut(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),
