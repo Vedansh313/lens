@@ -38,6 +38,42 @@ async function errorMessage(res, fallback) {
   return fallback;
 }
 
+// Pydantic's own wording is accurate but reads like a stack trace to whoever is
+// filling in the form ("String should have at least 8 characters"). Restate the
+// cases the register form can actually produce; anything unmapped falls back to
+// the server's text rather than a generic message, so a rule added backend-side
+// still surfaces something true.
+const FIELD_MESSAGES = {
+  email: { value_error: "Enter a valid email address." },
+  password: {
+    string_too_short: "Password must be at least 8 characters.",
+    string_too_long: "Password must be at most 128 characters.",
+  },
+  name: {
+    string_too_short: "Enter your name.",
+    string_too_long: "Name must be at most 255 characters.",
+  },
+};
+
+// Turn a 422 `detail` list into { field: message }, so each input can show its
+// own problem instead of one banner the user has to map back onto a field.
+function validationFields(detail) {
+  const fields = {};
+  for (const item of detail) {
+    // loc is ["body", "<field>"]; anything shorter is not field-level.
+    const field = Array.isArray(item.loc) ? item.loc[1] : null;
+    if (!field || fields[field]) continue; // first error per field wins
+    fields[field] = FIELD_MESSAGES[field]?.[item.type] || item.msg || "Invalid value.";
+  }
+  return fields;
+}
+
+function fieldError(message, fields) {
+  const err = new Error(message);
+  err.fields = fields;
+  return err;
+}
+
 // Exchange the stored refresh token for a fresh access token. Returns true on
 // success. Used transparently by getCurrentUser and by api.js's authed fetch
 // wrapper when the access token expires mid-session.
@@ -85,6 +121,54 @@ export async function login(email, password) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Signed in, but the session could not be established.");
   return user;
+}
+
+// POST /auth/register, then sign the new account straight in.
+//
+// Registering does not authenticate: the endpoint returns the profile, not
+// tokens. Delegating to login() here means "create account" leaves the user
+// signed in, and the one place that establishes a session stays login().
+//
+// Throws on failure. The thrown Error carries a `fields` map ({email, password,
+// name} -> message) whenever the server blamed specific fields, so the form can
+// mark the offending input; `message` is always set for a form-level fallback.
+export async function register({ email, password, name }) {
+  const res = await fetch(`${API_URL}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+      password,
+      name: name.trim(),
+    }),
+  });
+
+  if (!res.ok) {
+    let detail = null;
+    try {
+      detail = (await res.json()).detail;
+    } catch {
+      /* non-JSON body */
+    }
+
+    // 409: the email is taken. Only one field can be at fault, so point at it.
+    if (res.status === 409) {
+      const message =
+        typeof detail === "string" ? detail : "An account with this email already exists.";
+      throw fieldError(message, { email: message });
+    }
+    // 422: pydantic rejected the payload before any row was attempted.
+    if (Array.isArray(detail)) {
+      const fields = validationFields(detail);
+      const first = Object.values(fields)[0];
+      throw fieldError(first || "Please check the details you entered.", fields);
+    }
+    throw new Error(
+      typeof detail === "string" ? detail : "Could not create the account. Please try again."
+    );
+  }
+
+  return login(email, password);
 }
 
 // GET /auth/me for the current access token, refreshing once on a 401.

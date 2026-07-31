@@ -792,6 +792,51 @@ body[data-theme="dark"] .login-submit {
   cursor: wait;
 }
 
+/* Sits inside the field's label, under the input, so it is announced with the
+   field rather than as a loose paragraph. Red text alone would be the only
+   signal for anyone who cannot see colour, hence aria-invalid on the input. */
+.field-error {
+  color: #b42318;
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+body[data-theme="dark"] .field-error {
+  color: #f7b4ad;
+}
+
+.login-fields input[aria-invalid="true"] {
+  border-color: #b42318;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.login-switch {
+  margin: 0.9rem 0 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+/* A button, not an anchor — it switches a mode flag, it does not navigate.
+   Styled as a link because that is what it reads as in the sentence. */
+.login-switch-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.login-switch-btn:hover { color: var(--text); }
+
 .login-demo {
   margin-top: 1.25rem;
   padding-top: 1.15rem;

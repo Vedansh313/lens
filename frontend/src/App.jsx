@@ -11,6 +11,7 @@ import {
   AUTH_EXPIRED_EVENT,
   login as apiLogin,
   logout as apiLogout,
+  register as apiRegister,
   getCurrentUser,
 } from "@/data/auth";
 import { useCart } from "@/hooks/useCart";
@@ -68,6 +69,15 @@ export default function App() {
     return user;
   };
 
+  // register() signs the new account in as its last step, so this ends with a
+  // session exactly like handleLogin — the caller cannot end up registered but
+  // still looking at the login screen.
+  const handleRegister = async ({ email, password, name }) => {
+    const user = await apiRegister({ email, password, name });
+    setSession(user);
+    return user;
+  };
+
   const handleLogout = async () => {
     await apiLogout();
     setSession(null);
@@ -77,7 +87,14 @@ export default function App() {
   const toggleTheme = () => setTheme((prev) => (prev === "dark" ? "light" : "dark"));
 
   if (!session) {
-    return <LoginPage onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />;
+    return (
+      <LoginPage
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+    );
   }
 
   if (view === "cart") {
